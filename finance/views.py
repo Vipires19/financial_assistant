@@ -9,14 +9,19 @@ a lógica de negócio e retornam respostas.
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.contrib import messages
+from django.views.decorators.http import require_POST
 import logging
 import os
 import json
+import uuid
 from finance.services.transaction_service import TransactionService
+from core.repositories.user_repository import UserRepository
 from finance.services.dashboard_service import DashboardService
 from finance.services.compromisso_service import CompromissoService
 from core.services.categoria_usuario_service import CategoriaUsuarioService
 from finance.models.categoria_model import CategoriaModel
+from finance.models import FinancialAccount
+from django.contrib.auth import get_user_model
 from core.decorators import audit_log
 from core.decorators.auth import login_required_mongo
 from datetime import datetime, timedelta
@@ -61,11 +66,29 @@ def dashboard_api_view(request):
     # SEGURANÇA: user_id vem do middleware, não do request do cliente
     user_id = str(request.user_mongo['_id'])
     period = request.GET.get('period', 'mensal')
-    
+    month = request.GET.get('month')
+    year = request.GET.get('year')
+    if month is not None and month != '':
+        try:
+            month = int(month)
+        except (ValueError, TypeError):
+            month = None
+    else:
+        month = None
+    if year is not None and year != '':
+        try:
+            year = int(year)
+        except (ValueError, TypeError):
+            year = None
+    else:
+        year = None
+
     service = DashboardService()
     data = service.get_dashboard_data(
         user_id=user_id,  # Sempre do usuário autenticado
-        period=period
+        period=period,
+        month=month,
+        year=year
     )
     
     return JsonResponse(data, json_dumps_params={'ensure_ascii': False})
@@ -204,19 +227,28 @@ def charts_api_view(request):
     # SEGURANÇA: user_id vem do middleware, não do request do cliente
     user_id = str(request.user_mongo['_id'])
     period = request.GET.get('period', 'mensal')
+    month = request.GET.get('month')
+    year = request.GET.get('year')
+    month = int(month) if month else None
+    year = int(year) if year else None
     chart_type = request.GET.get('type', 'all')
-    
+
     try:
         service = DashboardService()
         
         if chart_type == 'category':
-            data = service.get_expenses_by_category_chart_data(user_id, period)
+            data = service.get_expenses_by_category_chart_data(user_id, period, month, year)
         elif chart_type == 'weekday':
-            data = service.get_expenses_by_weekday_chart_data(user_id, period)
+            data = service.get_expenses_by_weekday_chart_data(user_id, period, month, year)
         elif chart_type == 'hour':
-            data = service.get_expenses_by_hour_chart_data(user_id, period)
+            data = service.get_expenses_by_hour_chart_data(user_id, period, month, year)
         else:  # 'all'
-            data = service.get_all_charts_data(user_id, period)
+            data = service.get_all_charts_data(
+                user_id=user_id,
+                period=period,
+                month=month,
+                year=year
+            )
         
         return JsonResponse(data, json_dumps_params={'ensure_ascii': False})
     
@@ -505,6 +537,14 @@ def api_insights(request):
     return JsonResponse(insights)
 
 @login_required_mongo
+def contas_view(request):
+    """Página de gerenciamento de contas financeiras (listar, criar, editar, desativar)."""
+    if not hasattr(request, 'user_mongo') or not request.user_mongo:
+        return redirect('/login/')
+    return render(request, 'finance/contas.html', {'user': request.user_mongo})
+
+
+@login_required_mongo
 def criar_transacao_view(request):
     """
     View para criar nova transação.
@@ -525,6 +565,244 @@ def criar_transacao_view(request):
         'user': request.user_mongo,
         'categorias': todas_categorias
     })
+
+
+def accounts_api_view(request):
+    """
+    API endpoint para listar contas financeiras do usuário.
+    
+    GET /finance/api/accounts/
+    Retorna lista de contas ativas para o usuário autenticado (Django User por email).
+    """
+    if not hasattr(request, 'user_mongo') or not request.user_mongo:
+        return JsonResponse({'error': 'Não autenticado'}, status=401)
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Método não permitido'}, status=405)
+    email = request.user_mongo.get('email')
+    if not email:
+        return JsonResponse([], safe=False)
+    User = get_user_model()
+    django_user = User.objects.filter(email=email.lower()).first()
+    if not django_user:
+        return JsonResponse([], safe=False)
+    accounts = FinancialAccount.objects.filter(user=django_user, is_active=True).order_by('name')
+    data = [{'id': str(acc.id), 'name': acc.name, 'type': acc.type} for acc in accounts]
+    return JsonResponse(data, safe=False)
+
+
+def accounts_balance_api_view(request):
+    """
+    GET /finance/api/accounts/balance/
+    Retorna saldo total e saldo por conta (user.contas + transações).
+    """
+    if not hasattr(request, 'user_mongo') or not request.user_mongo:
+        return JsonResponse({'error': 'Não autenticado'}, status=401)
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Método não permitido'}, status=405)
+    user_id = str(request.user_mongo['_id'])
+    service = DashboardService()
+    data = service.get_account_balances(user_id)
+    return JsonResponse({
+        'total_balance': data['total_balance'],
+        'accounts': data['accounts'],
+        'credit_cards': data.get('credit_cards', []),
+    }, json_dumps_params={'ensure_ascii': False})
+
+
+def contas_list_create_api_view(request):
+    """
+    GET /finance/api/contas/ — lista contas do usuário (user.contas no MongoDB).
+    POST /finance/api/contas/ — cria nova conta em user.contas.
+    """
+    if not hasattr(request, 'user_mongo') or not request.user_mongo:
+        return JsonResponse({'error': 'Não autenticado'}, status=401)
+
+    user_id = str(request.user_mongo['_id'])
+    user_repo = UserRepository()
+    user = user_repo.find_by_id(user_id)
+    if not user:
+        return JsonResponse({'error': 'Usuário não encontrado'}, status=404)
+
+    contas = user.get('contas') or []
+
+    if request.method == 'GET':
+        return JsonResponse({'contas': contas}, json_dumps_params={'ensure_ascii': False})
+
+    if request.method == 'POST':
+        try:
+            if request.content_type and 'application/json' in request.content_type:
+                data = json.loads(request.body)
+            else:
+                data = request.POST.dict()
+            nome = (data.get('nome') or '').strip()
+            tipo = (data.get('tipo') or 'other').strip()
+            saldo_inicial = float(data.get('saldo_inicial', 0))
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return JsonResponse({'error': 'Payload inválido'}, status=400)
+        if not nome:
+            return JsonResponse({'error': 'nome é obrigatório'}, status=400)
+        nova_conta = {
+            'id': str(uuid.uuid4()),
+            'nome': nome,
+            'tipo': tipo,
+            'saldo_inicial': saldo_inicial,
+            'ativa': True,
+        }
+        contas.append(nova_conta)
+        if not user_repo.update(user_id, contas=contas):
+            return JsonResponse({'error': 'Erro ao salvar conta'}, status=500)
+        return JsonResponse({'contas': contas, 'conta': nova_conta}, json_dumps_params={'ensure_ascii': False}, status=201)
+
+    return JsonResponse({'error': 'Método não permitido'}, status=405)
+
+
+def pagar_fatura_api_view(request):
+    """
+    POST /finance/api/contas/pagar-fatura/
+    Payload: { "cartao_id": "...", "conta_pagadora_id": "...", "valor": 1000 }
+    Cria expense na conta pagadora e income no cartão; retorna sucesso e saldos atualizados.
+    """
+    if not hasattr(request, 'user_mongo') or not request.user_mongo:
+        return JsonResponse({'error': 'Não autenticado'}, status=401)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método não permitido'}, status=405)
+
+    user_id = str(request.user_mongo['_id'])
+    try:
+        if request.content_type and 'application/json' in request.content_type:
+            data = json.loads(request.body)
+        else:
+            data = request.POST.dict()
+        cartao_id = (data.get('cartao_id') or '').strip()
+        conta_pagadora_id = (data.get('conta_pagadora_id') or '').strip()
+        valor = float(data.get('valor', 0))
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return JsonResponse({'error': 'Payload inválido. Envie cartao_id, conta_pagadora_id e valor.'}, status=400)
+
+    if not cartao_id or not conta_pagadora_id:
+        return JsonResponse({'error': 'cartao_id e conta_pagadora_id são obrigatórios'}, status=400)
+    if valor <= 0:
+        return JsonResponse({'error': 'valor deve ser maior que zero'}, status=400)
+
+    user_repo = UserRepository()
+    user = user_repo.find_by_id(user_id)
+    if not user:
+        return JsonResponse({'error': 'Usuário não encontrado'}, status=404)
+
+    contas = user.get('contas') or []
+    cartao = next((c for c in contas if c.get('id') == cartao_id), None)
+    conta_pagadora = next((c for c in contas if c.get('id') == conta_pagadora_id), None)
+
+    if not cartao:
+        return JsonResponse({'error': 'Cartão não encontrado'}, status=404)
+    if cartao.get('tipo') != 'credit_card':
+        return JsonResponse({'error': 'cartao_id deve ser uma conta do tipo credit_card'}, status=400)
+
+    if not conta_pagadora:
+        return JsonResponse({'error': 'Conta pagadora não encontrada'}, status=404)
+    if conta_pagadora.get('tipo') == 'credit_card':
+        return JsonResponse({'error': 'conta_pagadora_id não pode ser um cartão de crédito'}, status=400)
+
+    transaction_service = TransactionService()
+    now = datetime.utcnow()
+
+    try:
+        trans_saida = transaction_service.create_transaction(
+            user_id=user_id,
+            amount=valor,
+            description='Pagamento fatura cartão de crédito',
+            transaction_type='expense',
+            category='outros',
+            account_id=conta_pagadora_id,
+            created_at=now,
+        )
+        trans_entrada = transaction_service.create_transaction(
+            user_id=user_id,
+            amount=valor,
+            description='Pagamento fatura (entrada no cartão)',
+            transaction_type='income',
+            category='outros',
+            account_id=cartao_id,
+            created_at=now,
+        )
+    except ValueError as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+    service = DashboardService()
+    balances = service.get_account_balances(user_id)
+    return JsonResponse({
+        'success': True,
+        'message': 'Fatura paga com sucesso.',
+        'total_balance': balances['total_balance'],
+        'accounts': balances['accounts'],
+        'credit_cards': balances.get('credit_cards', []),
+    }, json_dumps_params={'ensure_ascii': False})
+
+
+def contas_detail_api_view(request, conta_id):
+    """
+    PUT /finance/api/contas/<id>/ — edita nome, tipo, saldo_inicial (não altera id).
+    DELETE /finance/api/contas/<id>/ — desativa conta (ativa=False). Não permite desativar conta_principal.
+    """
+    if not hasattr(request, 'user_mongo') or not request.user_mongo:
+        return JsonResponse({'error': 'Não autenticado'}, status=401)
+
+    if request.method == 'DELETE':
+        if conta_id == 'conta_principal':
+            return JsonResponse({'error': 'Não é permitido desativar a Conta Principal'}, status=400)
+        user_id = str(request.user_mongo['_id'])
+        user_repo = UserRepository()
+        user = user_repo.find_by_id(user_id)
+        if not user:
+            return JsonResponse({'error': 'Usuário não encontrado'}, status=404)
+        contas = user.get('contas') or []
+        encontrada = False
+        for conta in contas:
+            if conta.get('id') == conta_id:
+                conta['ativa'] = False
+                encontrada = True
+                break
+        if not encontrada:
+            return JsonResponse({'error': 'Conta não encontrada'}, status=404)
+        if not user_repo.update(user_id, contas=contas):
+            return JsonResponse({'error': 'Erro ao atualizar conta'}, status=500)
+        return JsonResponse({'contas': contas}, json_dumps_params={'ensure_ascii': False})
+
+    if request.method == 'PUT':
+        user_id = str(request.user_mongo['_id'])
+        user_repo = UserRepository()
+        user = user_repo.find_by_id(user_id)
+        if not user:
+            return JsonResponse({'error': 'Usuário não encontrado'}, status=404)
+        try:
+            if request.content_type and 'application/json' in request.content_type:
+                data = json.loads(request.body)
+            else:
+                data = request.POST.dict()
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Payload inválido'}, status=400)
+        contas = user.get('contas') or []
+        encontrada = False
+        for conta in contas:
+            if conta.get('id') == conta_id:
+                if 'nome' in data and data['nome'] is not None:
+                    conta['nome'] = str(data['nome']).strip()
+                if 'tipo' in data and data['tipo'] is not None:
+                    conta['tipo'] = str(data['tipo']).strip()
+                if 'saldo_inicial' in data and data['saldo_inicial'] is not None:
+                    try:
+                        conta['saldo_inicial'] = float(data['saldo_inicial'])
+                    except (ValueError, TypeError):
+                        pass
+                encontrada = True
+                break
+        if not encontrada:
+            return JsonResponse({'error': 'Conta não encontrada'}, status=404)
+        if not user_repo.update(user_id, contas=contas):
+            return JsonResponse({'error': 'Erro ao atualizar conta'}, status=500)
+        return JsonResponse({'contas': contas}, json_dumps_params={'ensure_ascii': False})
+
+    return JsonResponse({'error': 'Método não permitido'}, status=405)
 
 
 def create_transaction_api_view(request):
@@ -554,18 +832,21 @@ def create_transaction_api_view(request):
                 valor = data.get('valor')
                 descricao = data.get('descricao')
                 data_str = data.get('data')  # Pode ser 'YYYY-MM-DD' ou 'YYYY-MM-DDTHH:MM:SS'
+                account_id = data.get('account_id')
             except:
                 transaction_type = None
                 categoria = None
                 valor = None
                 descricao = None
                 data_str = None
+                account_id = None
         else:
             transaction_type = request.POST.get('tipo')
             categoria = request.POST.get('categoria')
             valor = request.POST.get('valor')
             descricao = request.POST.get('descricao')
             data_str = request.POST.get('data')
+            account_id = request.POST.get('account_id') or None
         
         if not all([transaction_type, categoria, valor, descricao]):
             return JsonResponse({'error': 'Campos obrigatórios: tipo, categoria, valor, descricao'}, status=400)
@@ -611,7 +892,8 @@ def create_transaction_api_view(request):
             description=descricao,
             transaction_type=transaction_type,
             category=categoria,
-            created_at=created_at
+            created_at=created_at,
+            account_id=account_id if account_id else None
         )
         
         return JsonResponse({
@@ -644,6 +926,72 @@ def agenda_view(request):
     """
     return render(request, 'finance/agenda.html', {
         'user': request.user_mongo if hasattr(request, 'user_mongo') and request.user_mongo else None
+    })
+
+
+@login_required_mongo
+def plano_view(request):
+    """
+    View da página de gerenciamento de plano do usuário.
+    Lê apenas de user["assinatura"]: plano, status, proximo_vencimento.
+    Não usa campos antigos (status_pagamento, data_vencimento_plano).
+    """
+    user = request.user_mongo
+    assinatura = user.get("assinatura", {})
+
+    plano = assinatura.get("plano")
+    status = assinatura.get("status")
+    proximo_vencimento = assinatura.get("proximo_vencimento")
+
+    proximo_vencimento_str = None
+    if proximo_vencimento and hasattr(proximo_vencimento, "strftime"):
+        proximo_vencimento_str = proximo_vencimento.strftime("%d/%m/%Y")
+    elif proximo_vencimento is not None:
+        proximo_vencimento_str = str(proximo_vencimento)
+
+    context = {
+        "plano": plano,
+        "status": status,
+        "proximo_vencimento": proximo_vencimento_str,
+    }
+    return render(request, "finance/plano.html", context)
+
+
+@login_required_mongo
+@require_POST
+def cancelar_assinatura_api_view(request):
+    """
+    Cancela a assinatura do usuário no Mercado Pago e atualiza o MongoDB (plano sem_plano, status inativa).
+    """
+    user = request.user_mongo
+    assinatura = user.get("assinatura", {})
+    mp_subscription_id = assinatura.get("mp_subscription_id") or assinatura.get("gateway_subscription_id")
+
+    if not mp_subscription_id:
+        return JsonResponse({
+            "success": False,
+            "message": "Assinatura não encontrada."
+        }, status=400)
+
+    try:
+        from core.services.mercadopago_assinatura import cancelar_assinatura
+        cancelar_assinatura(str(mp_subscription_id))
+    except Exception as e:
+        logger.exception("Erro ao cancelar assinatura no MP: %s", e)
+        return JsonResponse({
+            "success": False,
+            "message": "Erro ao cancelar assinatura no Mercado Pago."
+        }, status=500)
+
+    user_repo = UserRepository()
+    user_repo.update(
+        str(user["_id"]),
+        **{"assinatura.plano": "sem_plano", "assinatura.status": "inativa"}
+    )
+
+    return JsonResponse({
+        "success": True,
+        "message": "Assinatura cancelada com sucesso."
     })
 
 

@@ -6,10 +6,16 @@ Localização: finance/services/dashboard_service.py
 Este service gera todas as métricas e dados necessários para o dashboard,
 usando agregações do MongoDB para máxima performance.
 """
+import calendar
 from typing import Dict, Any, Optional, List, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 from finance.repositories.transaction_repository import TransactionRepository
+from core.repositories.user_repository import UserRepository
+
+
+# Estágio de agregação: data efetiva da transação (transaction_date ou created_at para compatibilidade)
+_EFFECTIVE_DATE_STAGE = {'$addFields': {'_effective_date': {'$ifNull': ['$transaction_date', '$created_at']}}}
 
 
 class DashboardService:
@@ -26,8 +32,9 @@ class DashboardService:
     
     def __init__(self):
         self.transaction_repo = TransactionRepository()
+        self.user_repo = UserRepository()
     
-    def get_dashboard_data(self, user_id: str, period: str = 'mensal') -> Dict[str, Any]:
+    def get_dashboard_data(self, user_id: str, period: str = 'mensal', month: Optional[int] = None, year: Optional[int] = None) -> Dict[str, Any]:
         """
         Gera todos os dados do dashboard financeiro.
         
@@ -54,7 +61,7 @@ class DashboardService:
             raise ValueError("user_id é obrigatório para acessar dados do dashboard")
         
         # Calcula datas do período
-        start_date, end_date = self._get_period_dates(period)
+        start_date, end_date = self._get_period_dates(period, month, year)
         
         # Executa todas as agregações em paralelo (via pipeline único otimizado)
         data = {
@@ -88,34 +95,79 @@ class DashboardService:
         )
         data['transactions'] = transactions_data['transactions']
         data['transactions_pagination'] = transactions_data['pagination']
+
+        # Saldo por conta e saldo total (user.contas + transações; credit_card não entra no total)
+        balances = self._get_balances_by_account(user_id)
+        data['total_balance'] = balances['total_balance']
+        data['accounts'] = balances['accounts']
+        data['credit_cards'] = balances.get('credit_cards', [])
+        
+        # Top 3 categorias com maior gasto no período
+        data['top_expense_categories'] = self.get_top_expense_categories(
+            user_id, period, month, year
+        )
         
         return data
     
-    def _get_period_dates(self, period: str) -> Tuple[datetime, datetime]:
+    def _get_period_dates(self, period: str, month: Optional[int] = None, year: Optional[int] = None) -> Tuple[datetime, datetime]:
         """
         Calcula as datas de início e fim do período.
-        
+        Respeita month e year quando informados (filtros do dashboard).
+        Todas as datas em UTC para compatibilidade com transaction_date/created_at no MongoDB.
+
         Args:
-            period: 'diário', 'semanal' ou 'mensal'
-        
+            period: 'diário'/'diario', 'semanal', 'mensal' ou 'anual'
+            month: Mês (1-12) para período mensal (opcional, da query string).
+            year: Ano para período mensal ou anual (opcional, da query string).
+
         Returns:
             Tupla (start_date, end_date)
         """
-        end_date = datetime.utcnow()
-        
-        if period == 'diário':
-            start_date = end_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        now = datetime.now(timezone.utc)
+        period = (period or '').strip().lower()
+
+        if period in ('diário', 'diario'):
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = now
+
         elif period == 'semanal':
-            # Últimos 7 dias
-            start_date = end_date - timedelta(days=7)
+            start = now - timedelta(days=7)
+            end = now
+
         elif period == 'mensal':
-            # Mês atual
-            start_date = end_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            if month and year:
+                try:
+                    month = int(month)
+                    year = int(year)
+                except (ValueError, TypeError):
+                    month = None
+                    year = None
+            if month and year:
+                start = datetime(year, month, 1, tzinfo=timezone.utc)
+                last_day = calendar.monthrange(year, month)[1]
+                end = datetime(year, month, last_day, 23, 59, 59, tzinfo=timezone.utc)
+            else:
+                start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                end = now
+
+        elif period == 'anual':
+            if year:
+                try:
+                    year = int(year)
+                except (ValueError, TypeError):
+                    year = None
+            if year:
+                start = datetime(year, 1, 1, tzinfo=timezone.utc)
+                end = datetime(year, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+            else:
+                start = datetime(now.year, 1, 1, tzinfo=timezone.utc)
+                end = now
+
         else:
-            # Default: mensal
-            start_date = end_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        
-        return start_date, end_date
+            start = now - timedelta(days=30)
+            end = now
+
+        return start, end
     
     def _get_totals(self, user_id: str, start_date: datetime, 
                     end_date: datetime) -> Dict[str, float]:
@@ -131,10 +183,11 @@ class DashboardService:
             Dict com total_expenses, total_income, balance
         """
         pipeline = [
+            _EFFECTIVE_DATE_STAGE,
             {
                 '$match': {
                     'user_id': ObjectId(user_id),
-                    'created_at': {
+                    '_effective_date': {
                         '$gte': start_date,
                         '$lte': end_date
                     }
@@ -148,8 +201,6 @@ class DashboardService:
             }
         ]
         
-        # Acessa collection diretamente para agregações complexas
-        # (isso é aceitável para agregações que não são CRUD simples)
         results = list(self.transaction_repo.collection.aggregate(pipeline))
         
         total_income = sum(r['total'] for r in results if r['_id'] == 'income')
@@ -160,7 +211,73 @@ class DashboardService:
             'total_income': total_income,
             'balance': total_income - total_expense
         }
-    
+
+    def _get_balances_by_account(self, user_id: str) -> Dict[str, Any]:
+        """
+        Calcula saldo de cada conta (user.contas) com base em saldo_inicial e transações.
+        Para todas: saldo = saldo_inicial + income - expense.
+        total_balance = soma apenas de contas que NÃO são credit_card.
+        Contas do tipo credit_card vão em credit_cards e não entram no total_balance.
+
+        Returns:
+            Dict com total_balance (float), accounts (lista de {id, nome, balance}),
+            credit_cards (lista de {id, nome, balance}).
+        """
+        user = self.user_repo.find_by_id(user_id)
+        contas = (user or {}).get('contas') or []
+
+        # Busca todas as transações do usuário (sem filtro de período, para saldo acumulado)
+        transactions = self.transaction_repo.find_many(
+            query={'user_id': ObjectId(user_id)},
+            limit=50000,
+            skip=0,
+            sort=('created_at', 1)
+        )
+
+        total_balance = 0.0
+        accounts = []
+        credit_cards = []
+
+        for conta in contas:
+            conta_id = conta.get('id')
+            nome = conta.get('nome') or '-'
+            tipo = conta.get('tipo') or ''
+            saldo_inicial = float(conta.get('saldo_inicial') or 0)
+            balance = saldo_inicial
+
+            for trans in transactions:
+                if trans.get('account_id') != conta_id:
+                    continue
+                value = float(trans.get('value') or 0)
+                if trans.get('type') == 'income':
+                    balance += value
+                else:
+                    balance -= value
+
+            item = {
+                'id': conta_id,
+                'nome': nome,
+                'balance': round(balance, 2),
+            }
+            if tipo == 'credit_card':
+                credit_cards.append(item)
+            else:
+                total_balance += balance
+                accounts.append(item)
+
+        return {
+            'total_balance': round(total_balance, 2),
+            'accounts': accounts,
+            'credit_cards': credit_cards,
+        }
+
+    def get_account_balances(self, user_id: str) -> Dict[str, Any]:
+        """
+        Retorna saldo total e saldo por conta para o usuário.
+        Útil para expor via API GET /finance/api/accounts/balance/
+        """
+        return self._get_balances_by_account(user_id)
+
     def _get_day_with_highest_expense(self, user_id: str, start_date: datetime,
                                      end_date: datetime) -> Optional[Dict[str, Any]]:
         """
@@ -180,11 +297,12 @@ class DashboardService:
             raise ValueError("user_id é obrigatório")
         
         pipeline = [
+            _EFFECTIVE_DATE_STAGE,
             {
                 '$match': {
-                    'user_id': ObjectId(user_id),  # CRÍTICO: Sempre filtrar por user_id primeiro
+                    'user_id': ObjectId(user_id),
                     'type': 'expense',
-                    'created_at': {
+                    '_effective_date': {
                         '$gte': start_date,
                         '$lte': end_date
                     }
@@ -195,27 +313,20 @@ class DashboardService:
                     '_id': {
                         '$dateToString': {
                             'format': '%Y-%m-%d',
-                            'date': '$created_at'
+                            'date': '$_effective_date'
                         }
                     },
                     'total': {'$sum': '$value'},
-                    'date': {'$first': '$created_at'}
+                    'date': {'$first': '$_effective_date'}
                 }
             },
-            {
-                '$sort': {'total': -1}
-            },
-            {
-                '$limit': 1
-            }
+            {'$sort': {'total': -1}},
+            {'$limit': 1}
         ]
         
-        # Acessa collection diretamente para agregações complexas
-        # (isso é aceitável para agregações que não são CRUD simples)
         results = list(self.transaction_repo.collection.aggregate(pipeline))
         
         if results:
-            # Formata a data no padrão brasileiro
             date_obj = results[0]['_id']
             if isinstance(date_obj, datetime):
                 formatted_date = date_obj.strftime('%d/%m/%Y')
@@ -257,11 +368,12 @@ class DashboardService:
             raise ValueError("user_id é obrigatório")
         
         pipeline = [
+            _EFFECTIVE_DATE_STAGE,
             {
                 '$match': {
-                    'user_id': ObjectId(user_id),  # CRÍTICO: Sempre filtrar por user_id primeiro
+                    'user_id': ObjectId(user_id),
                     'type': 'expense',
-                    'created_at': {
+                    '_effective_date': {
                         '$gte': start_date,
                         '$lte': end_date
                     }
@@ -274,16 +386,10 @@ class DashboardService:
                     'count': {'$sum': 1}
                 }
             },
-            {
-                '$sort': {'total': -1}
-            },
-            {
-                '$limit': 1
-            }
+            {'$sort': {'total': -1}},
+            {'$limit': 1}
         ]
         
-        # Acessa collection diretamente para agregações complexas
-        # (isso é aceitável para agregações que não são CRUD simples)
         results = list(self.transaction_repo.collection.aggregate(pipeline))
         
         if results:
@@ -294,6 +400,47 @@ class DashboardService:
             }
         
         return None
+    
+    def get_top_expense_categories(self, user_id: str, period: str = 'mensal',
+                                    month: Optional[int] = None, year: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Retorna as 3 categorias com maior gasto no período (ranking).
+        
+        Args:
+            user_id: ID do usuário
+            period: 'diário', 'semanal', 'mensal' ou 'anual'
+            month: Mês (1-12) opcional
+            year: Ano opcional
+        
+        Returns:
+            Lista de até 3 itens: [{"category": str, "total": float}, ...]
+        """
+        if not user_id:
+            return []
+        start_date, end_date = self._get_period_dates(period, month, year)
+        pipeline = [
+            _EFFECTIVE_DATE_STAGE,
+            {
+                '$match': {
+                    'user_id': ObjectId(user_id),
+                    'type': 'expense',
+                    '_effective_date': {'$gte': start_date, '$lte': end_date}
+                }
+            },
+            {
+                '$group': {
+                    '_id': '$category',
+                    'total': {'$sum': '$value'}
+                }
+            },
+            {'$sort': {'total': -1}},
+            {'$limit': 3}
+        ]
+        results = list(self.transaction_repo.collection.aggregate(pipeline))
+        return [
+            {'category': (r['_id'] or 'outros'), 'total': float(r['total'])}
+            for r in results
+        ]
     
     def _get_hour_with_highest_expense(self, user_id: str, start_date: datetime,
                                       end_date: datetime) -> Optional[Dict[str, Any]]:
@@ -315,11 +462,12 @@ class DashboardService:
             raise ValueError("user_id é obrigatório")
         
         pipeline = [
+            _EFFECTIVE_DATE_STAGE,
             {
                 '$match': {
-                    'user_id': ObjectId(user_id),  # CRÍTICO: Sempre filtrar por user_id primeiro
+                    'user_id': ObjectId(user_id),
                     'type': 'expense',
-                    'created_at': {
+                    '_effective_date': {
                         '$gte': start_date,
                         '$lte': end_date
                     }
@@ -327,7 +475,7 @@ class DashboardService:
             },
             {
                 '$group': {
-                    '_id': '$hour',
+                    '_id': {'$hour': '$_effective_date'},
                     'total': {'$sum': '$value'},
                     'count': {'$sum': 1}
                 }
@@ -385,47 +533,43 @@ class DashboardService:
         if not user_id:
             raise ValueError("user_id é obrigatório")
         
-        query = {
-            'user_id': ObjectId(user_id),  # CRÍTICO: Sempre filtrar por user_id
-            'created_at': {
-                '$gte': start_date,
-                '$lte': end_date
-            }
-        }
+        # Usa agregação para filtrar por data efetiva (transaction_date ou created_at)
+        pipeline_count = [
+            _EFFECTIVE_DATE_STAGE,
+            {'$match': {'user_id': ObjectId(user_id), '_effective_date': {'$gte': start_date, '$lte': end_date}}},
+            {'$count': 'total'}
+        ]
+        count_result = list(self.transaction_repo.collection.aggregate(pipeline_count))
+        total = count_result[0]['total'] if count_result else 0
         
-        # Conta total de transações
-        total = self.transaction_repo.count(query)
+        pipeline_list = [
+            _EFFECTIVE_DATE_STAGE,
+            {'$match': {'user_id': ObjectId(user_id), '_effective_date': {'$gte': start_date, '$lte': end_date}}},
+            {'$sort': {'_effective_date': -1}},
+            {'$skip': skip},
+            {'$limit': limit}
+        ]
+        transactions = list(self.transaction_repo.collection.aggregate(pipeline_list))
         
-        # Busca transações com paginação
-        transactions = self.transaction_repo.find_many(
-            query=query,
-            limit=limit,
-            skip=skip,
-            sort=('created_at', -1)
-        )
-        
-        # Calcula informações de paginação
         current_page = (skip // limit) + 1
         total_pages = (total + limit - 1) // limit if total > 0 else 1
         has_next = skip + limit < total
         has_prev = skip > 0
         
-        # Formata transações para resposta
         formatted = []
         for trans in transactions:
-            created_at = trans['created_at']
-            if isinstance(created_at, datetime):
-                date_str = created_at.strftime('%d/%m/%Y')
-                time_str = created_at.strftime('%H:%M')
+            data_transacao = trans.get('transaction_date') or trans.get('created_at')
+            if isinstance(data_transacao, datetime):
+                date_str = data_transacao.strftime('%d/%m/%Y')
+                time_str = data_transacao.strftime('%H:%M')
             else:
-                # Se for string, tenta converter
                 try:
                     from dateutil import parser
-                    dt = parser.parse(created_at) if isinstance(created_at, str) else created_at
+                    dt = parser.parse(data_transacao) if isinstance(data_transacao, str) else data_transacao
                     date_str = dt.strftime('%d/%m/%Y')
                     time_str = dt.strftime('%H:%M')
-                except:
-                    date_str = str(created_at)
+                except (TypeError, ValueError):
+                    date_str = str(data_transacao) if data_transacao else ''
                     time_str = ''
             
             formatted.append({
@@ -436,7 +580,7 @@ class DashboardService:
                 'value': float(trans['value']),
                 'date': date_str,
                 'time': time_str,
-                'created_at': created_at.isoformat() if isinstance(created_at, datetime) else str(created_at),
+                'created_at': data_transacao.isoformat() if isinstance(data_transacao, datetime) else str(data_transacao) if data_transacao else '',
                 'hour': trans.get('hour', None)
             })
         
@@ -454,8 +598,8 @@ class DashboardService:
     
     # ==================== MÉTODOS PARA GRÁFICOS (Chart.js) ====================
     
-    def get_expenses_by_category_chart_data(self, user_id: str, 
-                                           period: str = 'mensal') -> Dict[str, Any]:
+    def get_expenses_by_category_chart_data(self, user_id: str,
+                                           period: str = 'mensal', month: Optional[int] = None, year: Optional[int] = None) -> Dict[str, Any]:
         """
         Gera dados para gráfico de despesas e entradas por categoria (Chart.js).
         
@@ -463,20 +607,25 @@ class DashboardService:
         
         Args:
             user_id: ID do usuário
-            period: Período ('diário', 'semanal', 'mensal')
+            period: Período ('diário', 'semanal', 'mensal', 'anual')
+            month: Mês (1-12) quando period mensal (opcional).
+            year: Ano quando period mensal ou anual (opcional).
         
         Returns:
             Dict no formato Chart.js com dois datasets (entradas e gastos)
         """
-        start_date, end_date = self._get_period_dates(period)
+        if isinstance(user_id, str):
+            user_id = ObjectId(user_id)
+        start_date, end_date = self._get_period_dates(period, month, year)
         
         # Pipeline para gastos
         pipeline_expenses = [
+            _EFFECTIVE_DATE_STAGE,
             {
                 '$match': {
-                    'user_id': ObjectId(user_id),
+                    'user_id': user_id,
                     'type': 'expense',
-                    'created_at': {
+                    '_effective_date': {
                         '$gte': start_date,
                         '$lte': end_date
                     }
@@ -495,11 +644,12 @@ class DashboardService:
         
         # Pipeline para entradas
         pipeline_incomes = [
+            _EFFECTIVE_DATE_STAGE,
             {
                 '$match': {
-                    'user_id': ObjectId(user_id),
+                    'user_id': user_id,
                     'type': 'income',
-                    'created_at': {
+                    '_effective_date': {
                         '$gte': start_date,
                         '$lte': end_date
                     }
@@ -587,7 +737,7 @@ class DashboardService:
         }
     
     def get_expenses_by_weekday_chart_data(self, user_id: str,
-                                          period: str = 'mensal') -> Dict[str, Any]:
+                                          period: str = 'mensal', month: Optional[int] = None, year: Optional[int] = None) -> Dict[str, Any]:
         """
         Gera dados para gráfico de despesas por dia da semana (Chart.js).
         
@@ -602,36 +752,34 @@ class DashboardService:
         """
         if not user_id:
             raise ValueError("user_id é obrigatório")
-        
-        start_date, end_date = self._get_period_dates(period)
+        if isinstance(user_id, str):
+            user_id = ObjectId(user_id)
+        start_date, end_date = self._get_period_dates(period, month, year)
         
         # Nomes dos dias da semana em português
         weekday_names = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
         
-        # Busca todas as transações de despesas no período
-        query = {
-            'user_id': ObjectId(user_id),
-            'type': 'expense',
-            'created_at': {
-                '$gte': start_date,
-                '$lte': end_date
-            }
-        }
+        # Busca transações de despesas no período (data efetiva = transaction_date ou created_at)
+        pipeline = [
+            _EFFECTIVE_DATE_STAGE,
+            {
+                '$match': {
+                    'user_id': user_id,
+                    'type': 'expense',
+                    '_effective_date': {'$gte': start_date, '$lte': end_date}
+                }
+            },
+            {'$limit': 10000}
+        ]
+        transactions = list(self.transaction_repo.collection.aggregate(pipeline))
         
-        transactions = self.transaction_repo.find_many(query=query, limit=10000)
-        
-        # Nomes dos dias da semana em português (0=Segunda, 6=Domingo)
         weekday_names = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-        
-        # Cria array com 7 posições (uma para cada dia da semana)
-        # Python weekday(): 0=Segunda, 1=Terça, ..., 6=Domingo
         data_by_weekday = [0.0] * 7
         
         for trans in transactions:
-            created_at = trans.get('created_at')
-            if isinstance(created_at, datetime):
-                # weekday() retorna 0 (Segunda) a 6 (Domingo)
-                weekday_index = created_at.weekday()
+            data_transacao = trans.get('transaction_date') or trans.get('created_at')
+            if isinstance(data_transacao, datetime):
+                weekday_index = data_transacao.weekday()
                 if 0 <= weekday_index < 7:
                     data_by_weekday[weekday_index] += float(trans.get('value', 0))
         
@@ -647,7 +795,7 @@ class DashboardService:
         }
     
     def get_expenses_by_hour_chart_data(self, user_id: str,
-                                       period: str = 'mensal') -> Dict[str, Any]:
+                                       period: str = 'mensal', month: Optional[int] = None, year: Optional[int] = None) -> Dict[str, Any]:
         """
         Gera dados para gráfico de despesas por horário do dia (Chart.js).
         
@@ -656,22 +804,26 @@ class DashboardService:
         
         Args:
             user_id: ID do usuário (obrigatório)
-            period: Período ('diário', 'semanal', 'mensal')
+            period: Período ('diário', 'semanal', 'mensal', 'anual')
+            month: Mês (1-12) quando period mensal (opcional).
+            year: Ano quando period mensal ou anual (opcional).
         
         Returns:
             Dict no formato Chart.js
         """
         if not user_id:
             raise ValueError("user_id é obrigatório")
-        
-        start_date, end_date = self._get_period_dates(period)
+        if isinstance(user_id, str):
+            user_id = ObjectId(user_id)
+        start_date, end_date = self._get_period_dates(period, month, year)
         
         pipeline = [
+            _EFFECTIVE_DATE_STAGE,
             {
                 '$match': {
-                    'user_id': ObjectId(user_id),  # CRÍTICO: Sempre filtrar por user_id primeiro
+                    'user_id': user_id,
                     'type': 'expense',
-                    'created_at': {
+                    '_effective_date': {
                         '$gte': start_date,
                         '$lte': end_date
                     }
@@ -679,18 +831,15 @@ class DashboardService:
             },
             {
                 '$group': {
-                    '_id': '$hour',  # Campo extraído - muito rápido!
+                    '_id': {'$hour': '$_effective_date'},
                     'total': {'$sum': '$value'}
                 }
             },
-            {
-                '$sort': {'_id': 1}
-            }
+            {'$sort': {'_id': 1}}
         ]
         
         results = list(self.transaction_repo.collection.aggregate(pipeline))
         
-        # Cria array com 24 posições (uma para cada hora)
         labels = [f"{h:02d}:00" for h in range(24)]
         data_by_hour = [0.0] * 24
         
@@ -712,25 +861,392 @@ class DashboardService:
             }]
         }
     
-    def get_all_charts_data(self, user_id: str, period: str = 'mensal') -> Dict[str, Any]:
+    def get_chart_data_by_date(self, user_id: str, period: str = 'mensal', month: Optional[int] = None, year: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Gera dados para gráfico de saldo acumulado por data (Chart.js).
+        
+        Agrupa transações por data (YYYY-MM-DD), calcula saldo do dia (income - expense)
+        e saldo acumulado ao longo dos dias. Usa a mesma lógica de período dos demais charts.
+        
+        Args:
+            user_id: ID do usuário
+            period: Período ('diário', 'semanal', 'mensal', 'anual')
+            month: Mês (1-12) quando period mensal (opcional).
+            year: Ano quando period mensal ou anual (opcional).
+        
+        Returns:
+            Dict no formato Chart.js com labels (DD/MM) e dataset "Saldo Acumulado"
+        """
+        if isinstance(user_id, str):
+            user_id = ObjectId(user_id)
+        start_date, end_date = self._get_period_dates(period, month, year)
+        
+        pipeline = [
+            _EFFECTIVE_DATE_STAGE,
+            {
+                '$match': {
+                    'user_id': user_id,
+                    '_effective_date': {'$gte': start_date, '$lte': end_date}
+                }
+            },
+            {
+                '$group': {
+                    '_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$_effective_date'}},
+                    'income': {'$sum': {'$cond': [{'$eq': ['$type', 'income']}, '$value', 0]}},
+                    'expense': {'$sum': {'$cond': [{'$eq': ['$type', 'expense']}, '$value', 0]}}
+                }
+            },
+            {'$sort': {'_id': 1}}
+        ]
+        
+        results = list(self.transaction_repo.collection.aggregate(pipeline))
+        
+        labels = []
+        saldo_acumulado_list = []
+        saldo_acumulado = 0.0
+        
+        for r in results:
+            date_str = r['_id']
+            income = float(r.get('income', 0))
+            expense = float(r.get('expense', 0))
+            saldo_dia = income - expense
+            saldo_acumulado += saldo_dia
+            
+            try:
+                dt = datetime.strptime(date_str, '%Y-%m-%d')
+                labels.append(dt.strftime('%d/%m'))
+            except (ValueError, TypeError):
+                labels.append(date_str)
+            saldo_acumulado_list.append(saldo_acumulado)
+        
+        return {
+            'labels': labels,
+            'datasets': [{
+                'label': 'Saldo Acumulado',
+                'data': saldo_acumulado_list,
+                'borderColor': 'rgba(59,130,246,1)',
+                'backgroundColor': 'rgba(59,130,246,0.2)',
+                'fill': True,
+                'tension': 0.4
+            }]
+        }
+
+    def get_cash_flow_chart(self, user_id: str, period: str = 'mensal',
+                            month: Optional[int] = None, year: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Gera dados para gráfico de fluxo de caixa (receitas, despesas e saldo por dia).
+        Formato Chart.js com 3 datasets: Receitas, Despesas, Saldo (acumulado).
+        """
+        if not user_id:
+            return {'labels': [], 'datasets': []}
+        start_date, end_date = self._get_period_dates(period, month, year)
+        pipeline = [
+            _EFFECTIVE_DATE_STAGE,
+            {
+                '$match': {
+                    'user_id': ObjectId(user_id),
+                    '_effective_date': {'$gte': start_date, '$lte': end_date}
+                }
+            },
+            {
+                '$group': {
+                    '_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$_effective_date'}},
+                    'income_total': {'$sum': {'$cond': [{'$eq': ['$type', 'income']}, '$value', 0]}},
+                    'expense_total': {'$sum': {'$cond': [{'$eq': ['$type', 'expense']}, '$value', 0]}}
+                }
+            },
+            {'$sort': {'_id': 1}}
+        ]
+        results = list(self.transaction_repo.collection.aggregate(pipeline))
+        labels = []
+        income_data = []
+        expense_data = []
+        balance_data = []
+        saldo_acumulado = 0.0
+        for r in results:
+            date_str = r['_id']
+            income = float(r.get('income_total', 0))
+            expense = float(r.get('expense_total', 0))
+            saldo_acumulado += income - expense
+            try:
+                dt = datetime.strptime(date_str, '%Y-%m-%d')
+                labels.append(dt.strftime('%d/%m'))
+            except (ValueError, TypeError):
+                labels.append(date_str)
+            income_data.append(income)
+            expense_data.append(expense)
+            balance_data.append(saldo_acumulado)
+        return {
+            'labels': labels,
+            'datasets': [
+                {
+                    'label': 'Receitas',
+                    'data': income_data,
+                    'borderColor': 'rgba(34,197,94,1)',
+                    'backgroundColor': 'rgba(34,197,94,0.1)',
+                    'fill': False,
+                    'tension': 0.4
+                },
+                {
+                    'label': 'Despesas',
+                    'data': expense_data,
+                    'borderColor': 'rgba(239,68,68,1)',
+                    'backgroundColor': 'rgba(239,68,68,0.1)',
+                    'fill': False,
+                    'tension': 0.4
+                },
+                {
+                    'label': 'Saldo',
+                    'data': balance_data,
+                    'borderColor': 'rgba(59,130,246,1)',
+                    'backgroundColor': 'rgba(59,130,246,0.1)',
+                    'fill': False,
+                    'tension': 0.4
+                }
+            ]
+        }
+
+    def get_expenses_distribution(self, user_id: str, period: str = 'mensal', month: Optional[int] = None, year: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Gera dados para gráfico de distribuição de despesas por categoria (Chart.js).
+        
+        Agrupa despesas por categoria no período, ordenadas por total decrescente.
+        Usa a mesma lógica de período (_get_period_dates).
+        
+        Args:
+            user_id: ID do usuário
+            period: Período ('diário', 'semanal', 'mensal', 'anual')
+            month: Mês (1-12) quando period mensal (opcional).
+            year: Ano quando period mensal ou anual (opcional).
+        
+        Returns:
+            Dict no formato Chart.js: labels (categorias), datasets com data e backgroundColor
+        """
+        if isinstance(user_id, str):
+            user_id = ObjectId(user_id)
+        start_date, end_date = self._get_period_dates(period, month, year)
+        
+        pipeline = [
+            _EFFECTIVE_DATE_STAGE,
+            {
+                '$match': {
+                    'user_id': user_id,
+                    'type': 'expense',
+                    '_effective_date': {'$gte': start_date, '$lte': end_date}
+                }
+            },
+            {
+                '$group': {
+                    '_id': '$category',
+                    'total': {'$sum': '$value'}
+                }
+            },
+            {'$sort': {'total': -1}}
+        ]
+        
+        results = list(self.transaction_repo.collection.aggregate(pipeline))
+        
+        background_palette = [
+            'rgba(239,68,68,0.8)',
+            'rgba(59,130,246,0.8)',
+            'rgba(16,185,129,0.8)',
+            'rgba(234,179,8,0.8)',
+            'rgba(168,85,247,0.8)',
+            'rgba(244,114,182,0.8)'
+        ]
+        
+        if not results:
+            return {
+                'labels': ['Sem dados'],
+                'datasets': [{
+                    'data': [0],
+                    'backgroundColor': [background_palette[0]],
+                    'borderWidth': 1
+                }]
+            }
+        
+        labels = [r['_id'] for r in results]
+        data = [float(r['total']) for r in results]
+        background_colors = [background_palette[i % len(background_palette)] for i in range(len(labels))]
+        
+        return {
+            'labels': labels,
+            'datasets': [{
+                'data': data,
+                'backgroundColor': background_colors,
+                'borderWidth': 1
+            }]
+        }
+    
+    def get_expenses_by_account(self, user_id: str, period: str = 'mensal', month: Optional[int] = None, year: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Gera dados para gráfico de despesas por conta (Chart.js).
+        
+        Agrupa despesas por account_id no período, mapeia account_id para nome da conta
+        (user.contas). Se a conta não existir mais, usa "Conta Removida".
+        
+        Args:
+            user_id: ID do usuário
+            period: Período ('diário', 'semanal', 'mensal', 'anual')
+            month: Mês (1-12) quando period mensal (opcional).
+            year: Ano quando period mensal ou anual (opcional).
+        
+        Returns:
+            Dict no formato Chart.js: labels (nomes das contas), dataset "Despesas por Conta"
+        """
+        if isinstance(user_id, str):
+            user_id = ObjectId(user_id)
+        start_date, end_date = self._get_period_dates(period, month, year)
+        
+        pipeline = [
+            _EFFECTIVE_DATE_STAGE,
+            {
+                '$match': {
+                    'user_id': user_id,
+                    'type': 'expense',
+                    '_effective_date': {'$gte': start_date, '$lte': end_date}
+                }
+            },
+            {
+                '$group': {
+                    '_id': '$account_id',
+                    'total': {'$sum': '$value'}
+                }
+            },
+            {'$sort': {'total': -1}}
+        ]
+        
+        results = list(self.transaction_repo.collection.aggregate(pipeline))
+        
+        if not results:
+            return {
+                'labels': ['Sem dados'],
+                'datasets': [{
+                    'label': 'Despesas por Conta',
+                    'data': [0],
+                    'backgroundColor': 'rgba(239,68,68,0.6)',
+                    'borderColor': 'rgba(239,68,68,1)',
+                    'borderWidth': 2
+                }]
+            }
+        
+        user = self.user_repo.find_by_id(user_id)
+        contas = (user or {}).get('contas') or []
+        id_to_nome = {str(conta.get('id', '')): conta.get('nome', '') for conta in contas if conta.get('id')}
+        
+        labels = []
+        data = []
+        for r in results:
+            account_id = r['_id']
+            if account_id is None:
+                account_id = ''
+            label = id_to_nome.get(str(account_id), 'Conta Removida')
+            labels.append(label)
+            data.append(float(r['total']))
+        
+        return {
+            'labels': labels,
+            'datasets': [{
+                'label': 'Despesas por Conta',
+                'data': data,
+                'backgroundColor': 'rgba(239,68,68,0.6)',
+                'borderColor': 'rgba(239,68,68,1)',
+                'borderWidth': 2
+            }]
+        }
+    
+    def get_income_vs_expense(self, user_id: str, period: str = 'mensal', month: Optional[int] = None, year: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Gera dados para gráfico Receita vs Despesa no período (Chart.js).
+        
+        Agrupa transações por type (income/expense), soma os valores e calcula
+        o resultado (receita - despesa). Usa a mesma lógica de período (_get_period_dates).
+        
+        Args:
+            user_id: ID do usuário
+            period: Período ('diário', 'semanal', 'mensal', 'anual')
+            month: Mês (1-12) quando period mensal (opcional).
+            year: Ano quando period mensal ou anual (opcional).
+        
+        Returns:
+            Dict com labels ["Receita", "Despesa"], datasets e campo "resultado"
+        """
+        if isinstance(user_id, str):
+            user_id = ObjectId(user_id)
+        start_date, end_date = self._get_period_dates(period, month, year)
+        
+        pipeline = [
+            _EFFECTIVE_DATE_STAGE,
+            {
+                '$match': {
+                    'user_id': user_id,
+                    '_effective_date': {'$gte': start_date, '$lte': end_date}
+                }
+            },
+            {
+                '$group': {
+                    '_id': '$type',
+                    'total': {'$sum': '$value'}
+                }
+            }
+        ]
+        
+        results = list(self.transaction_repo.collection.aggregate(pipeline))
+        
+        income_total = 0.0
+        expense_total = 0.0
+        for r in results:
+            tipo = r.get('_id')
+            total = float(r.get('total', 0))
+            if tipo == 'income':
+                income_total = total
+            elif tipo == 'expense':
+                expense_total = total
+        
+        resultado = income_total - expense_total
+        
+        return {
+            'labels': ['Receita', 'Despesa'],
+            'datasets': [{
+                'data': [income_total, expense_total],
+                'backgroundColor': [
+                    'rgba(34,197,94,0.8)',
+                    'rgba(239,68,68,0.8)'
+                ],
+                'borderWidth': 1
+            }],
+            'resultado': resultado
+        }
+    
+    def get_all_charts_data(self, user_id: str, period: str = 'mensal', month: Optional[int] = None, year: Optional[int] = None) -> Dict[str, Any]:
         """
         Gera todos os dados de gráficos de uma vez.
         
         Args:
             user_id: ID do usuário
-            period: Período ('diário', 'semanal', 'mensal')
+            period: Período ('diário', 'semanal', 'mensal', 'anual')
+            month: Mês (1-12) quando period mensal (opcional, da query string).
+            year: Ano quando period mensal ou anual (opcional, da query string).
         
         Returns:
             Dict com todos os dados de gráficos:
             {
                 'by_category': {...},
                 'by_weekday': {...},
-                'by_hour': {...}
+                'by_hour': {...},
+                'by_date': {...},
+                'expenses_distribution': {...},
+                'expenses_by_account': {...},
+                'income_vs_expense': {...}
             }
         """
         return {
-            'by_category': self.get_expenses_by_category_chart_data(user_id, period),
-            'by_weekday': self.get_expenses_by_weekday_chart_data(user_id, period),
-            'by_hour': self.get_expenses_by_hour_chart_data(user_id, period)
+            'by_category': self.get_expenses_by_category_chart_data(user_id, period, month, year),
+            'by_weekday': self.get_expenses_by_weekday_chart_data(user_id, period, month, year),
+            'by_hour': self.get_expenses_by_hour_chart_data(user_id, period, month, year),
+            'by_date': self.get_chart_data_by_date(user_id, period, month, year),
+            'expenses_distribution': self.get_expenses_distribution(user_id, period, month, year),
+            'expenses_by_account': self.get_expenses_by_account(user_id, period, month, year),
+            'income_vs_expense': self.get_income_vs_expense(user_id, period, month, year)
         }
 

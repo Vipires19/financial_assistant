@@ -178,7 +178,11 @@ def verificar_lembretes() -> None:
 
     # ----- Lembrete 1h (status confirmado) — update atômico para envio único -----
     cursor_1h = coll_compromissos.find({
-        "status": "confirmado",
+        "status": {"$ne": "cancelado"},
+        "$or": [
+            {"status": "confirmado"},
+            {"confirmado_usuario": True},
+        ],
         "lembrete_1h_enviado": {"$ne": True},
     })
     for comp in cursor_1h:
@@ -338,14 +342,16 @@ def verificar_trial_expirado() -> None:
 @celery.task
 def verificar_planos_vencidos() -> None:
     """
-    Rebaixa automaticamente usuários cujo data_vencimento_plano <= agora
-    para plano "sem_plano" e status_assinatura "inativa".
+    Rebaixa automaticamente usuários cujo plano venceu.
+    Considera assinatura.status em ["ativa", "cancelada"]: ambos mantêm acesso até
+    assinatura.proximo_vencimento. Só após passar o vencimento o plano é encerrado
+    (assinatura.plano = "sem_plano", assinatura.status = "inativa").
     """
     _, coll_clientes = get_mongo_colls()
     now = datetime.now(timezone.utc)
     cursor = coll_clientes.find({
-        "plano": {"$ne": "sem_plano"},
-        "data_vencimento_plano": {"$exists": True, "$lte": now},
+        "assinatura.status": {"$in": ["ativa", "cancelada"]},
+        "assinatura.proximo_vencimento": {"$exists": True, "$lt": now},
     })
     for user in cursor:
         try:
@@ -356,8 +362,6 @@ def verificar_planos_vencidos() -> None:
                 {"_id": user_id},
                 {
                     "$set": {
-                        "plano": "sem_plano",
-                        "status_assinatura": "inativa",
                         "assinatura.plano": "sem_plano",
                         "assinatura.status": "inativa",
                         "downgraded_at": now,

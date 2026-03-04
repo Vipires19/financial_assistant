@@ -9,20 +9,66 @@
 {% block content %}
 <div class="dashboard-finance-content min-h-screen">
     <!-- Main Content -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        <!-- Saldo Total e Contas -->
+        <div class="dashboard-section bg-white rounded-2xl shadow-lg p-8">
+            <p class="text-sm text-gray-500">Saldo Total</p>
+            <p id="saldoTotal" class="text-4xl font-bold text-green-600">
+                R$ 0,00
+            </p>
+            <p class="text-sm text-gray-500 mt-1">
+                Soma das contas bancárias (não inclui cartões)
+            </p>
+        </div>
+        <div id="accountsList" class="dashboard-section grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+        <!-- Cartões de Crédito (exibido apenas se houver credit_cards) -->
+        <div id="creditCardsSection" class="dashboard-section hidden">
+            <h3 class="text-xl font-bold text-gray-800 mt-8">
+                Cartões de Crédito
+            </h3>
+            <div id="creditCardsList" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4"></div>
+        </div>
+
         <!-- Filtro de Período -->
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div class="flex items-center space-x-2">
-                <label class="text-sm font-medium text-gray-700">Período:</label>
-                <select id="periodFilter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
-                    <option value="diário">Diário</option>
-                    <option value="semanal">Semanal</option>
-                    <option value="mensal" selected>Mensal</option>
-                </select>
+        <div class="dashboard-section bg-white rounded-2xl shadow p-6 mb-6">
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="flex items-center space-x-2">
+                    <label class="text-sm font-medium text-gray-700">Período:</label>
+                    <select id="periodFilter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                        <option value="diário">Diário</option>
+                        <option value="semanal">Semanal</option>
+                        <option value="mensal" selected>Mensal</option>
+                        <option value="anual">Anual</option>
+                    </select>
+                </div>
+                <div id="monthFilterWrapper" class="flex items-center space-x-2 hidden">
+                    <label class="text-sm font-medium text-gray-700">Mês:</label>
+                    <select id="monthFilter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                        <option value="1">Janeiro</option>
+                        <option value="2">Fevereiro</option>
+                        <option value="3">Março</option>
+                        <option value="4">Abril</option>
+                        <option value="5">Maio</option>
+                        <option value="6">Junho</option>
+                        <option value="7">Julho</option>
+                        <option value="8">Agosto</option>
+                        <option value="9">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                    </select>
+                </div>
+                <div id="yearFilterWrapper" class="flex items-center space-x-2 hidden">
+                    <label class="text-sm font-medium text-gray-700">Ano:</label>
+                    <select id="yearFilter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                        <!-- Preenchido dinamicamente via JavaScript -->
+                    </select>
+                </div>
             </div>
         </div>
 
-        <div class="mb-6 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-xl p-6 text-white shadow-lg">
+        <div class="dashboard-section bg-gradient-to-r from-blue-600 to-emerald-500 rounded-xl p-6 text-white shadow-lg">
             <h2 id="dashboardGreeting" class="text-2xl font-semibold">
                 Olá 👋
             </h2>
@@ -32,7 +78,7 @@
         </div>
 
         <!-- Cards de Métricas -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <div class="dashboard-section grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             <!-- Card: Gastos -->
             <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <div class="flex items-center justify-between">
@@ -136,20 +182,66 @@
             </div>
         </div>
 
-        <div class="bg-white border border-primary-200 rounded-xl p-4 shadow-sm mb-6">
+        <div class="dashboard-section bg-white border border-primary-200 rounded-xl p-4 shadow-sm mb-6">
             <h3 class="font-semibold text-primary-600">Insight Inteligente 🤖</h3>
             <p id="aiInsightText" class="text-sm mt-2 text-gray-700">
                 Em breve você verá análises automáticas baseadas no seu comportamento financeiro.
             </p>
         </div>
 
+        <!-- Top Gastos do Período -->
+        <div class="dashboard-section card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <h3 class="text-lg font-semibold text-gray-900 mb-3">Top Gastos do Período</h3>
+            <div id="topExpenseCategoriesList" class="text-sm text-gray-700">
+                Carregando...
+            </div>
+        </div>
+
         <!-- Seção de Gráficos -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="dashboard-section grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:col-span-2">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    Evolução do Saldo no Período
+                </h3>
+                <div class="h-72">
+                    <canvas id="balanceEvolutionChart"></canvas>
+                </div>
+            </div>
             <!-- Gráfico: Despesas e Entradas por Categoria -->
             <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Despesas e Entradas por Categoria</h3>
                 <div class="h-64">
                     <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    Distribuição de Despesas
+                </h3>
+                <div class="h-64">
+                    <canvas id="expensesDistributionChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:col-span-2">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    Despesas por Conta
+                </h3>
+                <div class="h-64">
+                    <canvas id="expensesByAccountChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    Receita vs Despesa
+                </h3>
+                <div class="relative h-64">
+                    <canvas id="incomeVsExpenseChart"></canvas>
+                    <div id="incomeVsExpenseCenterText"
+                         class="absolute inset-0 flex items-center justify-center text-center pointer-events-none">
+                    </div>
                 </div>
             </div>
 
@@ -171,7 +263,7 @@
         </div>
 
         <!-- Tabela de Transações -->
-        <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="dashboard-section card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div class="px-4 sm:px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <h3 class="text-lg font-semibold text-gray-900 mb-2 sm:mb-0">Transações</h3>
                 <div id="transactionsPaginationInfo" class="text-sm text-gray-600"></div>
@@ -353,11 +445,44 @@ function formatDate(dateString) {
     }
 }
 
+// Monta query string da API lendo period, month e year dos filtros do dashboard
+function buildDashboardParams() {
+    const period = document.getElementById('periodFilter').value;
+    const month = document.getElementById('monthFilter').value;
+    const year = document.getElementById('yearFilter').value;
+    const params = new URLSearchParams();
+    params.append('period', period);
+    if (month) {
+        params.append('month', month);
+    }
+    if (year) {
+        params.append('year', year);
+    }
+    return params.toString();
+}
+
+// Atualiza visibilidade dos filtros de mês e ano conforme o período
+function updateFilterVisibility() {
+    const period = document.getElementById('periodFilter').value;
+    const monthWrapper = document.getElementById('monthFilterWrapper');
+    const yearWrapper = document.getElementById('yearFilterWrapper');
+    if (!monthWrapper || !yearWrapper) return;
+    if (period === 'diário' || period === 'semanal') {
+        monthWrapper.classList.add('hidden');
+        yearWrapper.classList.add('hidden');
+    } else if (period === 'mensal') {
+        monthWrapper.classList.remove('hidden');
+        yearWrapper.classList.remove('hidden');
+    } else if (period === 'anual') {
+        monthWrapper.classList.add('hidden');
+        yearWrapper.classList.remove('hidden');
+    }
+}
+
 // Função para carregar dados do dashboard
-async function loadDashboardData(period = 'mensal') {
+async function loadDashboardData() {
     try {
-        // Carrega dados principais
-        const response = await fetch(`${API_BASE}/dashboard/?period=${period}`);
+        const response = await fetch(`${API_BASE}/dashboard/?${buildDashboardParams()}`);
         const data = await response.json();
 
         // Atualiza cards
@@ -396,6 +521,20 @@ async function loadDashboardData(period = 'mensal') {
             document.getElementById('hourHighestExpense').textContent = 'N/A';
         }
 
+        // Top 3 categorias com maior gasto no período
+        const topCategoriesEl = document.getElementById('topExpenseCategoriesList');
+        if (topCategoriesEl) {
+            const topCategories = data.top_expense_categories || [];
+            const medals = ['🥇', '🥈', '🥉'];
+            if (topCategories.length > 0) {
+                topCategoriesEl.innerHTML = topCategories.map((item, i) =>
+                    `${medals[i] || ''} ${item.category} — ${formatCurrency(item.total)}`
+                ).join('<br>');
+            } else {
+                topCategoriesEl.textContent = 'Sem dados no período.';
+            }
+        }
+
         // Não atualiza tabela aqui - ela tem sua própria paginação
         // A tabela será carregada separadamente via loadTransactions()
 
@@ -408,6 +547,10 @@ async function loadDashboardData(period = 'mensal') {
 let categoryChart = null;
 let weekdayChart = null;
 let hourChart = null;
+let balanceEvolutionChart = null;
+let expensesDistributionChart = null;
+let expensesByAccountChart = null;
+let incomeVsExpenseChart = null;
 
 // Função auxiliar para destruir gráfico de forma segura
 function destroyChart(chartInstance) {
@@ -430,17 +573,27 @@ function getChartThemeColors() {
     };
 }
 
-async function loadCharts(period = 'mensal') {
+async function loadCharts() {
     try {
+        const period = document.getElementById('periodFilter').value;
+        const month = document.getElementById('monthFilter')?.value;
+        const year = document.getElementById('yearFilter')?.value;
+
+        const params = new URLSearchParams();
+        params.append('period', period);
+        if (month) params.append('month', month);
+        if (year) params.append('year', year);
+
+        const url = `${API_BASE}/charts/?type=all&${params.toString()}`;
         console.log('Carregando gráficos para período:', period);
-        
+
         // Verifica se Chart.js está disponível
         if (typeof Chart === 'undefined') {
             console.error('Chart.js não está carregado! Verifique se o script está incluído.');
             return;
         }
 
-        const response = await fetch(`${API_BASE}/charts/?type=all&period=${period}`);
+        const response = await fetch(url);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -517,6 +670,170 @@ async function loadCharts(period = 'mensal') {
                     })() : undefined
                 }
             });
+        }
+
+        // ========== GRÁFICO DISTRIBUIÇÃO DE DESPESAS ==========
+        const expensesDistributionCtx = document.getElementById('expensesDistributionChart');
+        if (expensesDistributionCtx) {
+            expensesDistributionChart = destroyChart(expensesDistributionChart);
+            const expensesDistributionChartCtx = expensesDistributionCtx.getContext('2d');
+            var expensesDistData = chartsData.expenses_distribution;
+            if (!expensesDistData || !expensesDistData.labels || expensesDistData.labels.length === 0) {
+                expensesDistData = {
+                    labels: ['Sem dados'],
+                    datasets: [{
+                        data: [0],
+                        backgroundColor: ['rgba(200, 200, 200, 0.8)'],
+                        borderWidth: 1
+                    }]
+                };
+            }
+            expensesDistributionChart = new Chart(expensesDistributionChartCtx, {
+                type: 'doughnut',
+                data: expensesDistData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: (function() {
+                        var t = getChartThemeColors();
+                        return {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 10,
+                                    color: t.tick,
+                                    font: { size: 12 }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const value = formatCurrency(context.parsed != null ? context.parsed : 0);
+                                        return label ? `${label}: ${value}` : value;
+                                    }
+                                }
+                            }
+                        };
+                    })()
+                }
+            });
+        }
+
+        // ========== GRÁFICO DESPESAS POR CONTA ==========
+        const expensesByAccountCtx = document.getElementById('expensesByAccountChart');
+        if (expensesByAccountCtx) {
+            expensesByAccountChart = destroyChart(expensesByAccountChart);
+            const expensesByAccountChartCtx = expensesByAccountCtx.getContext('2d');
+            var expensesByAccountData = chartsData.expenses_by_account;
+            if (!expensesByAccountData || !expensesByAccountData.labels || expensesByAccountData.labels.length === 0) {
+                expensesByAccountData = {
+                    labels: ['Sem dados'],
+                    datasets: [{
+                        label: 'Despesas por Conta',
+                        data: [0],
+                        backgroundColor: 'rgba(239,68,68,0.6)',
+                        borderColor: 'rgba(239,68,68,1)',
+                        borderWidth: 2
+                    }]
+                };
+            }
+            expensesByAccountChart = new Chart(expensesByAccountChartCtx, {
+                type: 'bar',
+                data: expensesByAccountData,
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = formatCurrency(context.parsed.x != null ? context.parsed.x : 0);
+                                    return `${context.label || 'Despesas por Conta'}: ${value}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: (function() {
+                        var t = getChartThemeColors();
+                        return {
+                            x: {
+                                beginAtZero: true,
+                                grid: { color: t.grid },
+                                ticks: { color: t.tick, callback: function(value) { return formatCurrency(value); } }
+                            },
+                            y: {
+                                grid: { color: t.grid },
+                                ticks: { color: t.tick }
+                            }
+                        };
+                    })()
+                }
+            });
+        }
+
+        // ========== GRÁFICO RECEITA VS DESPESA ==========
+        const incomeVsExpenseCtx = document.getElementById('incomeVsExpenseChart');
+        if (incomeVsExpenseCtx) {
+            incomeVsExpenseChart = destroyChart(incomeVsExpenseChart);
+            const incomeVsExpenseChartCtx = incomeVsExpenseCtx.getContext('2d');
+            var incomeVsExpenseData = chartsData.income_vs_expense;
+            if (!incomeVsExpenseData || !incomeVsExpenseData.labels || !incomeVsExpenseData.datasets) {
+                incomeVsExpenseData = {
+                    labels: ['Receita', 'Despesa'],
+                    datasets: [{
+                        data: [0, 0],
+                        backgroundColor: ['rgba(34,197,94,0.8)', 'rgba(239,68,68,0.8)'],
+                        borderWidth: 1
+                    }],
+                    resultado: 0
+                };
+            }
+            incomeVsExpenseChart = new Chart(incomeVsExpenseChartCtx, {
+                type: 'doughnut',
+                data: incomeVsExpenseData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: (function() {
+                        var t = getChartThemeColors();
+                        return {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 10,
+                                    color: t.tick,
+                                    font: { size: 12 }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const value = formatCurrency(context.parsed != null ? context.parsed : 0);
+                                        return (context.label || '') + ': ' + value;
+                                    }
+                                }
+                            }
+                        };
+                    })()
+                }
+            });
+            var resultado = (chartsData.income_vs_expense && chartsData.income_vs_expense.resultado != null)
+                ? Number(chartsData.income_vs_expense.resultado) : 0;
+            const centerEl = document.getElementById('incomeVsExpenseCenterText');
+            if (centerEl) {
+                if (resultado > 0) {
+                    centerEl.innerHTML = '<div class="text-green-600 font-bold text-lg">+' + formatCurrency(resultado) + '</div><div class="text-xs text-gray-500">Resultado Positivo</div>';
+                } else if (resultado < 0) {
+                    centerEl.innerHTML = '<div class="text-red-600 font-bold text-lg">' + formatCurrency(resultado) + '</div><div class="text-xs text-gray-500">Resultado Negativo</div>';
+                } else {
+                    centerEl.innerHTML = '<div class="text-gray-600 font-bold text-lg">R$ 0,00</div><div class="text-xs text-gray-500">Equilibrado</div>';
+                }
+            }
         }
 
         // ========== GRÁFICO POR DIA DA SEMANA ==========
@@ -645,6 +962,62 @@ async function loadCharts(period = 'mensal') {
             });
         }
 
+        // ========== GRÁFICO EVOLUÇÃO DO SALDO (by_date) ==========
+        const balanceEvolutionCtx = document.getElementById('balanceEvolutionChart');
+        if (balanceEvolutionCtx) {
+            balanceEvolutionChart = destroyChart(balanceEvolutionChart);
+            const balanceEvolutionChartCtx = balanceEvolutionCtx.getContext('2d');
+            var byDateData = chartsData.by_date;
+            if (!byDateData || !byDateData.labels || byDateData.labels.length === 0) {
+                byDateData = {
+                    labels: ['Sem dados'],
+                    datasets: [{
+                        label: 'Saldo Acumulado',
+                        data: [0],
+                        borderColor: 'rgba(59,130,246,1)',
+                        backgroundColor: 'rgba(59,130,246,0.2)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                };
+            }
+            balanceEvolutionChart = new Chart(balanceEvolutionChartCtx, {
+                type: 'line',
+                data: byDateData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = formatCurrency(context.parsed.y != null ? context.parsed.y : 0);
+                                    return `Saldo Acumulado: ${value}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: (function() {
+                        var t = getChartThemeColors();
+                        return {
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: t.grid },
+                                ticks: { color: t.tick, callback: function(value) { return formatCurrency(value); } }
+                            },
+                            x: {
+                                grid: { color: t.grid },
+                                ticks: { color: t.tick, maxTicksLimit: 12 }
+                            }
+                        };
+                    })()
+                }
+            });
+        }
+
         console.log('Gráficos carregados com sucesso!');
 
     } catch (error) {
@@ -655,7 +1028,11 @@ async function loadCharts(period = 'mensal') {
         const chartContainers = [
             { id: 'categoryChart', name: 'Categoria' },
             { id: 'weekdayChart', name: 'Dia da Semana' },
-            { id: 'hourChart', name: 'Horário' }
+            { id: 'hourChart', name: 'Horário' },
+            { id: 'balanceEvolutionChart', name: 'Evolução do Saldo' },
+            { id: 'expensesDistributionChart', name: 'Distribuição de Despesas' },
+            { id: 'expensesByAccountChart', name: 'Despesas por Conta' },
+            { id: 'incomeVsExpenseChart', name: 'Receita vs Despesa' }
         ];
         
         chartContainers.forEach(chart => {
@@ -742,11 +1119,24 @@ let currentTransactionsPage = 1;
 let transactionsLimit = 20;
 let transactionsPagination = null;
 
+// Retorna { month, year } a enviar para a API conforme o período selecionado
+function getFilterMonthYear() {
+    const period = document.getElementById('periodFilter').value;
+    const monthEl = document.getElementById('monthFilter');
+    const yearEl = document.getElementById('yearFilter');
+    if (period === 'mensal' && monthEl && yearEl) {
+        return { month: monthEl.value || null, year: yearEl.value || null };
+    }
+    if (period === 'anual' && yearEl) {
+        return { month: null, year: yearEl.value || null };
+    }
+    return { month: null, year: null };
+}
+
 // Função para carregar transações com paginação
 async function loadTransactions(page = 1, limit = 20) {
     try {
-        const period = document.getElementById('periodFilter').value;
-        const response = await fetch(`${API_BASE}/transactions/?period=${period}&page=${page}&limit=${limit}`);
+        const response = await fetch(`${API_BASE}/transactions/?${buildDashboardParams()}&page=${page}&limit=${limit}`);
         const data = await response.json();
         
         if (data.transactions) {
@@ -776,14 +1166,25 @@ function updateDashboardSubGreeting() {
     const messages = {
         'diário': 'Aqui está o resumo do seu dia até agora.',
         'semanal': 'Aqui está o resumo da sua semana até agora.',
-        'mensal': 'Aqui está o resumo do seu mês até agora.'
+        'mensal': 'Aqui está o resumo do seu mês até agora.',
+        'anual': 'Aqui está o resumo do seu ano até agora.'
     };
     subGreetingEl.textContent = messages[period] || 'Aqui está o seu resumo financeiro até agora.';
 }
 
-async function loadInsights(period) {
+async function loadInsights() {
     try {
-        const response = await fetch(`/finance/api/insights/?period=${period}`);
+        const period = document.getElementById('periodFilter').value;
+        const month = document.getElementById('monthFilter')?.value;
+        const year = document.getElementById('yearFilter')?.value;
+
+        const params = new URLSearchParams();
+        params.append('period', period);
+        if (month) params.append('month', month);
+        if (year) params.append('year', year);
+
+        const url = `/finance/api/insights/?${params.toString()}`;
+        const response = await fetch(url);
         const data = await response.json();
 
         document.getElementById('aiInsightText').innerHTML = `
@@ -796,26 +1197,98 @@ async function loadInsights(period) {
     }
 }
 
+// Carrega saldo total e saldo por conta
+async function loadAccountBalances() {
+    const saldoTotalEl = document.getElementById('saldoTotal');
+    const accountsListEl = document.getElementById('accountsList');
+    const creditCardsSectionEl = document.getElementById('creditCardsSection');
+    const creditCardsListEl = document.getElementById('creditCardsList');
+    if (!saldoTotalEl || !accountsListEl) return;
+    try {
+        const response = await fetch('/finance/api/accounts/balance/');
+        const data = await response.json();
+        const total = data.total_balance != null ? Number(data.total_balance) : 0;
+        const accounts = data.accounts || [];
+        saldoTotalEl.textContent = formatCurrency(total);
+        saldoTotalEl.className = 'text-3xl font-bold ' + (total >= 0 ? 'text-green-600' : 'text-red-600');
+        if (accounts.length === 0) {
+            accountsListEl.innerHTML = '';
+        } else {
+            accountsListEl.innerHTML = accounts.map(acc => {
+                const balance = acc.balance != null ? Number(acc.balance) : 0;
+                const colorClass = balance >= 0 ? 'text-green-600' : 'text-red-600';
+                return `
+                    <div class="bg-white rounded-2xl shadow p-5 flex justify-between items-center border-l-4 border-primary-500">
+                        <p class="font-semibold text-gray-800">${escapeHtml(acc.nome || '-')}</p>
+                        <p class="text-lg font-bold ${colorClass}">${formatCurrency(balance)}</p>
+                    </div>
+                `;
+            }).join('');
+        }
+        // Cartões de Crédito: exibir seção apenas se houver credit_cards
+        const creditCards = data.credit_cards || [];
+        if (creditCardsSectionEl && creditCardsListEl) {
+            if (creditCards.length > 0) {
+                creditCardsSectionEl.classList.remove('hidden');
+                creditCardsListEl.innerHTML = creditCards.map(cc => {
+                    const balance = cc.balance != null ? Number(cc.balance) : 0;
+                    const colorClass = balance >= 0 ? 'text-green-600' : 'text-purple-600';
+                    return `
+                        <div class="bg-white rounded-2xl shadow p-5 border-l-4 border-purple-500">
+                            <p class="font-semibold text-gray-800">${escapeHtml(cc.nome || '-')}</p>
+                            <p class="text-lg font-bold ${colorClass}">${formatCurrency(balance)}</p>
+                            <span class="text-xs text-gray-400">Valor da fatura acumulada</span>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                creditCardsSectionEl.classList.add('hidden');
+                creditCardsListEl.innerHTML = '';
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao carregar saldos:', error);
+        saldoTotalEl.textContent = formatCurrency(0);
+        saldoTotalEl.className = 'text-3xl font-bold text-green-600';
+        accountsListEl.innerHTML = '';
+        if (creditCardsSectionEl) creditCardsSectionEl.classList.add('hidden');
+        if (creditCardsListEl) creditCardsListEl.innerHTML = '';
+    }
+}
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Função para recarregar tudo
 async function reloadDashboard() {
     updateDashboardSubGreeting();
-    const period = document.getElementById('periodFilter').value;
+    updateFilterVisibility();
     currentTransactionsPage = 1; // Reset para primeira página
     await Promise.all([
-        loadDashboardData(period),
-        loadCharts(period),
-        loadTransactions(1, transactionsLimit)
+        loadDashboardData(),
+        loadCharts(),
+        loadTransactions(1, transactionsLimit),
+        loadAccountBalances()
     ]);
-    await loadInsights(period);
+    await loadInsights();
 }
 
-// Event listeners
-document.getElementById('periodFilter').addEventListener('change', reloadDashboard);
+// Event listeners dos filtros
+document.getElementById('periodFilter').addEventListener('change', () => {
+    updateFilterVisibility();
+    reloadDashboard();
+});
+const monthFilterEl = document.getElementById('monthFilter');
+const yearFilterEl = document.getElementById('yearFilter');
+if (monthFilterEl) monthFilterEl.addEventListener('change', reloadDashboard);
+if (yearFilterEl) yearFilterEl.addEventListener('change', reloadDashboard);
 
 const generateReportBtn = document.getElementById('generateReportBtn');
 if (generateReportBtn) {
     generateReportBtn.addEventListener('click', async () => {
-        const period = document.getElementById('periodFilter').value;
+        const params = buildDashboardParams();
         const btn = document.getElementById('generateReportBtn');
         
         // Desabilita botão durante geração
@@ -824,7 +1297,7 @@ if (generateReportBtn) {
         
         try {
             // Gera relatório via API
-            const response = await fetch(`${API_BASE}/report/?period=${period}&format=json`);
+            const response = await fetch(`${API_BASE}/report/?${params}&format=json`);
             const data = await response.json();
             
             if (data.error) {
@@ -833,7 +1306,7 @@ if (generateReportBtn) {
             }
             
             // Opção 1: Abrir em nova página
-            const reportUrl = `/finance/report/?period=${period}`;
+            const reportUrl = `/finance/report/?${params}`;
             window.open(reportUrl, '_blank');
             
             // Opção 2: Mostrar em modal (comentado)
@@ -1060,8 +1533,32 @@ document.getElementById('addCategoryForm').addEventListener('submit', async (e) 
     await addCategory();
 });
 
+// Popula o select de ano (ano atual até ano atual - 4) e define mês atual como padrão
+function initFilterSelects() {
+    const yearSelect = document.getElementById('yearFilter');
+    const monthSelect = document.getElementById('monthFilter');
+    if (yearSelect) {
+        const currentYear = new Date().getFullYear();
+        yearSelect.innerHTML = '';
+        for (let i = 0; i <= 4; i++) {
+            const y = currentYear - i;
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            if (i === 0) opt.selected = true;
+            yearSelect.appendChild(opt);
+        }
+    }
+    if (monthSelect) {
+        const currentMonth = new Date().getMonth() + 1; // 1-12
+        monthSelect.value = String(currentMonth);
+    }
+}
+
 // Carrega dados iniciais
 document.addEventListener('DOMContentLoaded', () => {
+    initFilterSelects();
+    updateFilterVisibility();
     updateDashboardSubGreeting();
     reloadDashboard();
 });

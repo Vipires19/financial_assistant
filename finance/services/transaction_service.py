@@ -11,7 +11,22 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from finance.repositories.transaction_repository import TransactionRepository
 from core.services.audit_log_service import AuditLogService
+from core.repositories.user_repository import UserRepository
 from bson import ObjectId
+
+
+def _get_default_account_id(user: Dict[str, Any]) -> str:
+    """
+    Retorna o id da conta padrão do usuário a partir de user.contas (MongoDB).
+    Preferência: conta com id "conta_principal"; senão a primeira conta ativa.
+    """
+    contas = user.get("contas") or []
+    if not contas:
+        return "conta_principal"
+    for conta in contas:
+        if conta.get("id") == "conta_principal":
+            return "conta_principal"
+    return contas[0].get("id") or "conta_principal"
 
 
 class TransactionService:
@@ -64,7 +79,25 @@ class TransactionService:
         
         # Prepara dados para inserção conforme schema
         created_at = kwargs.get('created_at', kwargs.get('date', datetime.utcnow()))
-        
+        account_id = kwargs.get('account_id')
+        if isinstance(account_id, str):
+            account_id = account_id.strip() or None
+
+        # Busca usuário para obter user.contas (MongoDB)
+        user_repo = UserRepository()
+        user = user_repo.find_by_id(user_id) or {}
+
+        # Se account_id não foi informado, usa conta padrão do user.contas
+        if not account_id:
+            account_id = _get_default_account_id(user)
+        else:
+            # Valida se account_id está em user.contas; senão usa conta_principal
+            contas = user.get("contas") or []
+            ids_contas = [c.get("id") for c in contas if c.get("id")]
+            if account_id not in ids_contas:
+                account_id = _get_default_account_id(user)
+
+        extra = {k: v for k, v in kwargs.items() if k not in ['date', 'created_at', 'account_id']}
         transaction_data = {
             'user_id': ObjectId(user_id),
             'type': transaction_type,
@@ -73,9 +106,10 @@ class TransactionService:
             'value': abs(float(amount)),  # Sempre positivo conforme schema
             'created_at': created_at,
             'hour': created_at.hour if isinstance(created_at, datetime) else datetime.utcnow().hour,
-            **{k: v for k, v in kwargs.items() if k not in ['date', 'created_at']}
+            'account_id': account_id,
+            **extra,
         }
-        
+
         # Usa repository para persistir
         return self.transaction_repo.create(transaction_data)
     

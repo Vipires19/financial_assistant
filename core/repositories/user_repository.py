@@ -74,6 +74,27 @@ class UserRepository(BaseRepository):
             user_data['categorias'] = categorias_predefinidas
         else:
             user_data['categorias'] = kwargs['categorias']
+
+        # Contas padrão (não sobrescreve se vier em kwargs)
+        if 'contas' not in kwargs:
+            user_data['contas'] = [
+                {
+                    "id": "conta_principal",
+                    "nome": "Conta Principal",
+                    "tipo": "bank",
+                    "saldo_inicial": 0,
+                    "ativa": True,
+                },
+                {
+                    "id": "dinheiro",
+                    "nome": "Dinheiro",
+                    "tipo": "cash",
+                    "saldo_inicial": 0,
+                    "ativa": True,
+                },
+            ]
+        else:
+            user_data['contas'] = kwargs['contas']
         
         # Adiciona account_id se fornecido (futuro)
         if account_id:
@@ -107,18 +128,6 @@ class UserRepository(BaseRepository):
         if 'email_verificado' not in user_data:
             user_data['email_verificado'] = False
 
-        # Campos do modelo de planos SaaS (apenas se não vierem em kwargs)
-        if 'plano' not in kwargs:
-            now = datetime.utcnow()
-            user_data['plano'] = 'trial'
-            user_data['status_assinatura'] = 'ativa'
-            user_data['data_inicio_plano'] = now
-            user_data['data_vencimento_plano'] = now + timedelta(days=7)
-            user_data['trial_usado'] = True
-            user_data['gateway'] = None
-            user_data['subscription_id'] = None
-            user_data['ultimo_pagamento_em'] = None
-        
         # Salva o usuário no MongoDB
         result = self.collection.insert_one(user_data)
         user_data['_id'] = result.inserted_id

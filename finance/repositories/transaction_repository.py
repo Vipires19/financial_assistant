@@ -15,7 +15,8 @@ Schema da collection:
   description: String,
   value: Number (sempre positivo),
   created_at: ISODate,
-  hour: Number (0-23, extraído para análises)
+  hour: Number (0-23, extraído para análises),
+  account_id: String | null (opcional, UUID da FinancialAccount)
 }
 """
 from typing import Optional, List, Dict, Any
@@ -199,5 +200,11 @@ class TransactionRepository(BaseRepository):
         # Garante que value é sempre positivo
         if 'value' in data:
             data['value'] = abs(float(data['value']))
+
+        # account_id opcional (UUID da conta financeira como string)
+        if 'account_id' in data and data['account_id'] is not None:
+            data['account_id'] = str(data['account_id']).strip() or None
+        elif 'account_id' not in data:
+            data['account_id'] = None
         
         return super().create(data)

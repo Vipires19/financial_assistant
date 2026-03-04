@@ -1,0 +1,74 @@
+{% extends 'base_dashboard.html' %}
+
+{% block title %}Meu Plano{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Meu Plano</h1>
+
+        <div class="card-dashboard p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Resumo do plano</h2>
+            <dl class="space-y-3">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Plano atual</dt>
+                    <dd class="mt-1 text-gray-900 dark:text-white">{{ plano|default:"—" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Status</dt>
+                    <dd class="mt-1 text-gray-900 dark:text-white">{{ status|default:"—" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Próximo vencimento</dt>
+                    <dd class="mt-1 text-gray-900 dark:text-white">{{ proximo_vencimento|default:"—" }}</dd>
+                </div>
+            </dl>
+
+            <div class="mt-6 flex flex-wrap gap-3">
+                <a href="{% url 'core:planos' %}" class="btn-neon px-4 py-2 text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors">
+                    Alterar plano
+                </a>
+                <button type="button" id="btnCancelarAssinatura" class="px-4 py-2 text-sm font-medium rounded-lg border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors">
+                    Cancelar assinatura
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% csrf_token %}
+<script>
+(function() {
+    var btn = document.getElementById('btnCancelarAssinatura');
+    if (!btn) return;
+    var csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+    var csrftoken = csrfInput ? csrfInput.value : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+
+    btn.addEventListener('click', function() {
+        if (!confirm('Tem certeza que deseja cancelar sua assinatura?')) return;
+        btn.disabled = true;
+        fetch('/finance/api/cancelar-assinatura/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken || '',
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+        .then(function(result) {
+            if (result.ok && result.data.success) {
+                alert('Assinatura cancelada.');
+                window.location.reload();
+            } else {
+                alert(result.data.message || 'Não foi possível cancelar.');
+                btn.disabled = false;
+            }
+        })
+        .catch(function() {
+            alert('Erro ao cancelar. Tente novamente.');
+            btn.disabled = false;
+        });
+    });
+})();
+</script>
+{% endblock %}

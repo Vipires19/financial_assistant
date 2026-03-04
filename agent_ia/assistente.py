@@ -70,6 +70,60 @@ def normalizar(texto: str) -> str:
     )
     return texto.strip()
 
+
+def classificar_intencao(mensagem: str, state: dict) -> str:
+    """
+    Classifica a intenção da mensagem do usuário para orientar a escolha da tool.
+    Retorna: "transacao" | "correcao_transacao" | "agenda" | "relatorio" | "conversa"
+    """
+    if not mensagem or not isinstance(mensagem, str):
+        return "conversa"
+    msg = mensagem.strip().lower()
+    msg_norm = normalizar(mensagem)
+    msg_len = len(msg)
+
+    # correcao_transacao: frases curtas corrigindo algo recém registrado
+    tem_ultima_transacao = bool(state and state.get("ultima_transacao_id"))
+    indicios_correcao = any(
+        p in msg_norm
+        for p in (
+            "foi ontem", "foi hoje", "foi anteontem",
+            "era ", "era combustivel", "era combustível",
+            "na verdade foi", "na verdade era",
+            "foi no ", "foi na ", "paguei no ", "paguei na ",
+            "foi no c6", "foi no nubank", "conta ", "categoria ",
+            "foi 120", "foi 80", "era 100",
+        )
+    )
+    frase_curta = msg_len <= 80
+    if tem_ultima_transacao and frase_curta and (indicios_correcao or msg_len <= 35):
+        return "correcao_transacao"
+
+    # agenda: compromissos, lembrete, agendar
+    if any(p in msg_norm for p in (
+        "agendar", "compromisso", "lembrete", "reuniao", "reunião",
+        "marcar", "agenda", "cancelar compromisso", "confirmar", "cancelar "
+    )):
+        return "agenda"
+
+    # relatorio: relatórios, consultas de gastos por período
+    if any(p in msg_norm for p in (
+        "relatorio", "relatório", "relatorios", "quanto gastei",
+        "despesas do", "entradas do", "resumo do", "ultimo mes", "último mês",
+        "ultima semana", "última semana", "gastei com "
+    )):
+        return "relatorio"
+
+    # transacao: registrar gasto ou entrada
+    if any(p in msg_norm for p in (
+        "gastei", "recebi", "cadastre", "registre", "registrar",
+        "entrada de", "despesa de", "gasto de", "paguei", "paguei "
+    )):
+        return "transacao"
+
+    return "conversa"
+
+
 def fazer_requisicao_api(endpoint: str, method: str = "GET", data: dict = None) -> dict:
     """
     Helper para fazer requisições HTTP para a API Django
@@ -121,9 +175,10 @@ def fazer_requisicao_api(endpoint: str, method: str = "GET", data: dict = None) 
 
 memory = MongoDBSaver(coll_memoria)
 
-class State(TypedDict):
+class State(TypedDict, total=False):
     messages: Annotated[list, add_messages]
     user_info: Dict[str, Any]
+    ultima_transacao_id: str
 
 def check_user(state: dict, config: dict) -> dict:
     """
@@ -321,60 +376,74 @@ def check_user_by_email(state: dict, config: dict = None) -> dict:
 
 def check_plano(state: dict, config: dict = None) -> dict:
     """
-    Verifica se a assinatura do usuário está ativa (plano não expirado).
-    Só é chamado quando user_info.status == 'ativo'.
-    Se assinatura.fim < agora: atualiza Mongo (sem_plano, inativa) e retorna sem_plano.
-    Caso contrário retorna plano_ativo.
+    Verifica se a assinatura do usuário está ativa.
+    Caso o plano tenha vencido, atualiza automaticamente no Mongo para sem_plano/inativa.
     """
     try:
         user_info = state.get("user_info", {})
         user_id = user_info.get("user_id")
+
         if not user_id:
-            user_info["plano_result"] = "plano_ativo"
+            user_info["plano_result"] = "sem_plano"
             return state
 
         user = coll_clientes.find_one({"_id": ObjectId(user_id)})
+
         if not user:
-            user_info["plano_result"] = "plano_ativo"
+            user_info["plano_result"] = "sem_plano"
             return state
 
         assinatura = user.get("assinatura") or {}
-        fim = assinatura.get("proximo_vencimento") or assinatura.get("fim") or user.get("data_vencimento_plano")
-        plano_atual = assinatura.get("plano") or user.get("plano")
+        plano_atual = assinatura.get("plano")
+        status_assinatura = assinatura.get("status")
+        fim = assinatura.get("proximo_vencimento")
+
         user_info["plano"] = plano_atual
-        user_info["status_assinatura"] = assinatura.get("status") or user.get("status_assinatura")
+        user_info["status_assinatura"] = status_assinatura
         user_info["data_vencimento_plano"] = fim
-        if fim is None:
+
+        # Usuário sem plano
+        if plano_atual in [None, "sem_plano"]:
+            user_info["plano_result"] = "sem_plano"
+            return state
+
+        # Se não houver data de vencimento, assume plano ativo
+        if not fim:
             user_info["plano_result"] = "plano_ativo"
             return state
 
-        now = datetime.utcnow()
-        if hasattr(fim, "tzinfo") and fim.tzinfo is not None:
-            from datetime import timezone
-            fim = fim.astimezone(timezone.utc).replace(tzinfo=None)
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+
+        # Normalizar timezone do vencimento
+        if hasattr(fim, "tzinfo") and fim.tzinfo is None:
+            fim = fim.replace(tzinfo=timezone.utc)
 
         if fim < now:
             coll_clientes.update_one(
                 {"_id": ObjectId(user_id)},
                 {
                     "$set": {
-                        "plano": "sem_plano",
                         "assinatura.plano": "sem_plano",
                         "assinatura.status": "inativa",
                         "updated_at": datetime.utcnow(),
                     }
                 },
             )
+
             user_info["plano"] = "sem_plano"
             user_info["plano_result"] = "sem_plano"
+
             print(f"[CHECK_PLANO] Plano expirado para user_id={user_id}")
+
         else:
             user_info["plano_result"] = "plano_ativo"
 
         return state
+
     except Exception as e:
         print(f"[CHECK_PLANO] Erro: {e}")
-        state.setdefault("user_info", {})["plano_result"] = "plano_ativo"
+        state.setdefault("user_info", {})["plano_result"] = "sem_plano"
         return state
 
 
@@ -426,13 +495,16 @@ Quando o status do usuário for diferente de "ativo":
 
 3️⃣ REGISTRO DE TRANSAÇÕES →
 
-Perguntar sobre o tipo de transação (entrada ou gasto), e o valor da transação.
+Extraia automaticamente da mensagem do usuário tudo que for possível:
+- tipo da transação (expense ou income): ex. "gastei", "recebi", "entrada", "despesa"
+- valor (número mencionado em reais)
+- descrição: use os termos naturais do usuário (ex. "uber", "combustível", "salário")
+- categoria provável: inferir a partir do contexto (ex. transporte, alimentação, renda)
+- data natural: interpretar "ontem", "hoje", "anteontem", "segunda", "sexta passada", etc. Se nenhuma data for mencionada, assumir HOJE.
 
-Caso o valor seja informado, o assistente pergunta pela descrição da transação (Exemplo: "Qual a descrição do gasto?").
+Só pergunte ao usuário as informações que REALMENTE estiverem faltando (ex.: conta utilizada, conta que recebeu). NUNCA peça descrição se ela já estiver na frase. NUNCA peça valor se ele já estiver presente.
 
-Salvar a transação na coleção transactions do MongoDB, vinculando ao usuário atual.
-
-A transação será exibida no dashboard do usuário.
+Salvar a transação na coleção transactions do MongoDB, vinculando ao usuário atual. A transação será exibida no dashboard do usuário.
 
 4️⃣ GERAÇÃO DE RELATÓRIO →
 
@@ -460,7 +532,9 @@ Dia com o maior gasto e categoria mais frequente.
 
 ✅ Não crie cadastro temporário. Se o cliente não foi encontrado na base de dados, forneça o link de cadastro. Depois que ele se cadastrar, volte para a interação.
 
-✅ Sempre que o usuário solicitar uma transação, registre o valor, tipo (entrada ou gasto), categoria (se necessário) e descrição.
+✅ Sempre que o usuário solicitar uma transação, extraia da mensagem tipo, valor, descrição e categoria; só pergunte o que faltar (ex.: conta). Nunca peça descrição ou valor já informados.
+
+✅ Se o usuário enviar uma mensagem corrigindo a transação logo após registrá-la (ex.: "foi ontem", "na verdade foi 120", "era combustível"), use editar_ultima_transacao para atualizar a última transação em vez de criar uma nova.
 
 ✅ Use a API Waha para verificar o número do cliente e integrá-lo com o seu banco de dados para vincular as transações.
 
@@ -470,13 +544,212 @@ Dia com o maior gasto e categoria mais frequente.
 
 ⚠️ Nunca pergunte confirmação de datas simples como: amanhã, hoje, sexta, próxima semana. A menos que haja ambiguidade real. Datas relativas simples devem ser assumidas automaticamente — use a DATA ATUAL DO SISTEMA fornecida no prompt como referência e chame as tools com o período/data já interpretado.
 
+📘 CONHECIMENTO DO PRODUTO LEOZERA
+
+CONCEITO DE CONTAS
+
+No Leozera, as contas representam de onde o dinheiro sai ou entra.
+
+Exemplos de contas que o usuário pode cadastrar:
+
+• Conta C6 Bank
+• Conta Bradesco
+• Dinheiro (dinheiro em espécie)
+• Cartão Santander
+
+Quando o usuário registra uma transação, o sistema precisa saber qual conta foi usada.
+
+Exemplo:
+"Gastei 40 no mercado no C6"
+
+Isso permite calcular corretamente:
+
+• saldo das contas
+• gastos
+• relatórios financeiros
+
+O usuário pode gerenciar suas contas em:
+https://leozera.camppoia.com.br/finance/contas/
+
+
+CARTÕES DE CRÉDITO
+
+Cartões de crédito funcionam de forma diferente das contas normais.
+
+Quando o usuário registra um gasto no cartão de crédito, o dinheiro não sai imediatamente da conta bancária.
+
+Esse valor vira parte da fatura do cartão.
+
+Exemplo:
+"Gastei 100 no cartão Santander"
+
+Esse valor será adicionado à fatura do cartão.
+
+Quando o usuário paga a fatura, o dinheiro sai da conta bancária escolhida.
+
+Assim o sistema consegue controlar:
+
+• gastos no cartão
+• faturas
+• saldo das contas
+
+
+IMPORTANTE
+
+As contas são fundamentais para o funcionamento correto do sistema.
+
+O usuário deve cadastrar todas as suas contas principais, como:
+
+• contas bancárias
+• dinheiro em espécie
+• cartões de crédito
+
+Sem contas cadastradas o sistema não consegue registrar corretamente as transações.
+
+
+COMPORTAMENTO DO AGENTE
+
+Quando o usuário fizer perguntas sobre contas ou cartões, o agente deve explicar de forma simples e amigável.
+
+Evitar respostas longas.
+
+Se fizer sentido, incluir o link:
+
+https://leozera.camppoia.com.br/finance/contas/
+
+
+📅 AGENDA E COMPROMISSOS
+
+O Leozera possui uma agenda integrada para organizar compromissos e enviar lembretes automáticos.
+
+O usuário pode criar compromissos diretamente pelo WhatsApp.
+
+Exemplos:
+
+"Agendar dentista amanhã às 14h"
+"Marcar reunião sexta às 10h"
+"Agenda corte de cabelo sábado"
+
+Quando um compromisso é criado, o sistema:
+
+• registra o compromisso
+• envia lembrete 12 horas antes
+• envia lembrete 1 hora antes
+
+Se o compromisso estiver pendente, o Leozera pode pedir confirmação antes do horário.
+
+Exemplo:
+"O compromisso de amanhã às 14h está confirmado?"
+
+O usuário também pode cancelar compromissos dizendo:
+
+"Cancelar meu compromisso de amanhã"
+"Cancelar reunião de sexta"
+
+A agenda pode ser acessada no dashboard:
+
+https://leozera.camppoia.com.br/finance/agenda/
+
+COMPORTAMENTO DO AGENTE
+
+Quando o usuário perguntar sobre agenda ou compromissos, o agente deve explicar de forma simples e amigável como funciona o sistema de agenda e lembretes.
+
+Evitar respostas longas.
+
+
+📋 AJUDA E MENU
+
+Se o usuário perguntar algo como:
+
+"menu"
+"ajuda"
+"o que você faz"
+"como usar"
+"comandos"
+
+responda com um resumo das funcionalidades do Leozera.
+
+Resposta padrão:
+
+📋 O que você pode fazer comigo:
+
+💸 Registrar gastos
+"Gastei 40 no mercado"
+
+💰 Registrar entradas
+"Recebi 2000 de salário"
+
+📊 Ver relatórios
+"Quanto gastei esse mês?"
+
+📅 Criar compromissos
+"Agenda dentista amanhã às 14h"
+
+🏦 Gerenciar contas
+"Cadastrar conta C6"
+"Adicionar cartão Santander"
+
+📈 Ver seu dashboard
+https://leozera.camppoia.com.br/finance/dashboard/
+
+Se quiser testar, manda algo como:
+"Gastei 10 no café"
+
+COMPORTAMENTO
+
+A resposta deve ser curta, amigável e clara.
+
+Não chamar tools ao responder o menu.
+
+
+📌 ONBOARDING APÓS CADASTRO
+
+Se o usuário enviar mensagens como:
+
+"conclui meu cadastro"
+"acabei de me cadastrar"
+"criei minha conta"
+"quero organizar minha vida financeira"
+
+o agente deve iniciar um onboarding guiado.
+
+Responder com:
+
+Que bom que você chegou! 😄
+
+Vou te ajudar a organizar sua vida financeira.
+
+O primeiro passo é cadastrar suas contas.
+
+Exemplos de contas:
+• Conta C6 Bank
+• Conta Bradesco
+• Dinheiro
+• Cartão de crédito
+
+Isso é importante porque o Leozera precisa saber de onde o dinheiro sai ou entra.
+
+Você pode cadastrar suas contas aqui:
+https://leozera.camppoia.com.br/finance/contas/
+
+Depois disso você já pode registrar gastos comigo.
+
+Exemplo:
+"Gastei 40 no mercado"
+
+Quando terminar de cadastrar suas contas me avisa 👍
+
+IMPORTANTE: Não chamar tools. Apenas responder normalmente.
+
 🛠️ FERRAMENTAS DISPONÍVEIS
 
 📋 registrar_transacao → Registrar uma transação (gasto ou entrada).
 
-Exemplo: "Cadastre um gasto de 20 reais", "Registre uma entrada de 5000 reais".
+Extraia da mensagem do usuário: tipo, valor, descrição, categoria e data (interpretando expressões como "ontem", "hoje", "segunda"). Só pergunte o que faltar (ex.: conta). A função salva a transação no banco vinculada ao usuário.
 
-A função pedirá a descrição e salvará a transação no banco de dados, vinculada ao usuário.
+✏️ editar_ultima_transacao → Edita a última transação registrada. Use quando o usuário corrigir algo logo após o registro (ex.: "foi ontem", "na verdade foi 120", "era combustível"). Passe apenas os campos que mudaram: value, category, description, transaction_date, account_id. Não crie nova transação nesses casos — edite a última.
+
+📌 CATEGORIAS E CONTAS DO USUÁRIO (serão listadas abaixo quando o usuário estiver ativo): Use-as para reconhecer nomes de contas na frase (ex.: "no c6", "paguei no santander" → C6 Bank, Santander CC). Quando precisar perguntar qual conta foi utilizada e houver mais de uma, liste as opções entre parênteses: "Qual conta você utilizou? (C6 Bank, Dinheiro, Santander CC)". Reconheça variações do nome da conta na mensagem do usuário.
 
 📊 gerar_relatorio → Gerar relatório de transações financeiras no período solicitado.
 
@@ -527,23 +800,45 @@ Se não, enviar um link de cadastro para o usuário se registrar antes de usar o
 
 💬 ESTILO DE COMUNICAÇÃO
 
-Sempre amigável, profissional e direto ao ponto 🌟
+Mantenha respostas CURTAS. Evite mensagens longas. Seja amigável, direto e use emojis com moderação 🌟
 
-Use emojis para tornar a conversa mais leve e agradável 🎉
+Ao confirmar transação, use formato compacto. Exemplo:
+✅ Gasto registrado
+🍣 Poke
+R$100
+Categoria: Alimentação
+https://leozera.camppoia.com.br/finance/dashboard/
 
-Sempre confirme as informações importantes com clareza e solicite dados faltantes de maneira amigável.
-
-Nunca seja seco ou formal demais. Mantenha um tom simpático, eficiente e divertido 😄
+NUNCA use links formatados como [aqui](url). Sempre mostre o link direto (URL completa).
+Nunca seja seco ou formal demais. Tom simpático e eficiente 😄
 
 📝 EXEMPLOS DE FLUXOS CORRETOS
 
-🔹 EXEMPLO 1: Usuário solicitando o registro de uma transação
+🔹 EXEMPLO 1: Usuário já informa tipo, valor e descrição
+
+👤 Usuário: "Gastei 80 no uber"
+🤖 Bot: [extrai: tipo=expense, valor=80, descrição=uber, categoria=transporte] → Só falta conta.
+🤖 Bot: "Qual conta você utilizou?"
+👤 Usuário: "Nubank"
+🤖 Bot: [usa registrar_transacao]
+🤖 Bot: "✅ Gasto registrado\n🚗 Uber\nR$80\nCategoria: Transporte\nhttps://leozera.camppoia.com.br/finance/dashboard/"
+
+🔹 EXEMPLO 1b: Usuário informa entrada completa
+
+👤 Usuário: "Recebi 2000 de salário"
+🤖 Bot: [extrai: tipo=income, valor=2000, descrição=salário, categoria=renda] → Só falta conta.
+🤖 Bot: "Qual conta recebeu o valor?"
+👤 Usuário: "Conta corrente"
+🤖 Bot: [usa registrar_transacao]
+🤖 Bot: "✅ Entrada registrada\n💰 Salário\nR$2000\nCategoria: Renda\nhttps://leozera.camppoia.com.br/finance/dashboard/"
+
+🔹 EXEMPLO 1c: Usuário informa só valor (falta descrição)
 
 👤 Usuário: "Cadastre um gasto de 50 reais"
 🤖 Bot: "Qual a descrição do gasto?"
-👤 Usuário: "Compra de supermercado"
+👤 Usuário: "Supermercado"
 🤖 Bot: [usa registrar_transacao]
-🤖 Bot: "✅ Gasto de R$ 50,00 registrado com sucesso! O seu saldo está atualizado."
+🤖 Bot: "✅ Gasto registrado\n🛒 Supermercado\nR$50\nhttps://leozera.camppoia.com.br/finance/dashboard/"
 
 🔹 EXEMPLO 2: Usuário pedindo um relatório do mês passado
 
@@ -723,11 +1018,15 @@ def cadastrar_transacao(valor: float, tipo: str, descricao: str = None, categori
         
         # Validar tipo
         if tipo not in ['expense', 'income']:
-            return "❌ Erro: Tipo de transação inválido. Use 'expense' para gasto ou 'income' para entrada."
+            return "Essa movimentação é uma entrada ou uma despesa?"
         
         # Validar valor
-        if not valor or valor <= 0:
-            return "❌ Erro: O valor deve ser maior que zero."
+        try:
+            v = float(valor)
+        except (TypeError, ValueError):
+            return "Qual é o valor da transação?"
+        if v <= 0:
+            return "Qual é o valor da transação?"
         
         # Obter informações do usuário do state
         user_id = None
@@ -774,6 +1073,34 @@ def cadastrar_transacao(valor: float, tipo: str, descricao: str = None, categori
                 print(f"[CADASTRAR_TRANSACAO] Erro ao buscar usuário: {e}")
                 return f"❌ Erro ao buscar usuário no banco de dados: {str(e)}"
         
+        # Verificar se usuário tem pelo menos uma conta ativa (obrigatório para transação)
+        user_doc = coll_clientes.find_one({'_id': ObjectId(user_id) if isinstance(user_id, str) else user_id})
+        if not user_doc:
+            return "❌ Erro: Usuário não encontrado."
+        contas = user_doc.get("contas", [])
+        contas_ativas = [c for c in contas if c.get("ativa")]
+        if not contas_ativas:
+            return (
+                "⚠️ Antes de registrar transações, você precisa cadastrar suas contas financeiras.\n\n"
+                "Exemplo: Conta C6, Conta Bradesco, Cartão Santander, Dinheiro.\n\n"
+                "Acesse seu dashboard para cadastrar suas contas e depois volte aqui."
+            )
+        mensagem_lower = descricao.lower() if descricao else ""
+        conta_encontrada = None
+        for conta in contas_ativas:
+            nome_conta = conta.get("nome", "").lower()
+            if nome_conta and nome_conta in mensagem_lower:
+                conta_encontrada = conta
+                break
+        if conta_encontrada:
+            account_id = conta_encontrada["id"]
+        else:
+            account_id = contas_ativas[0]["id"]
+        
+        if len(contas_ativas) > 1 and not conta_encontrada:
+            nomes = ", ".join([c["nome"] for c in contas_ativas])
+            return f"Qual conta você utilizou? ({nomes})"
+        
         # Se descrição não fornecida, retornar mensagem pedindo descrição
         if not descricao or descricao.strip() == "":
             tipo_label = "gasto" if tipo == "expense" else "entrada"
@@ -808,25 +1135,42 @@ def cadastrar_transacao(valor: float, tipo: str, descricao: str = None, categori
                 # Em caso de erro, usar categoria padrão
                 categoria = "Outros"
         
+        # Verificar categoria válida do usuário
+        categorias_usuario = user_doc.get("categorias", {})
+        todas_categorias = []
+        for lista in categorias_usuario.values():
+            todas_categorias.extend(lista)
+        if todas_categorias and categoria.strip() not in todas_categorias:
+            return "Qual categoria dessa transação? Ex: Supermercado, Combustível, Aluguel..."
+        
         # Obter data e hora atuais
         created_at = datetime.now(pytz.timezone("America/Sao_Paulo"))
+        transaction_date = created_at
         hour = created_at.hour
         
-        # Preparar documento da transação
+        # Preparar documento da transação (account_id obrigatório)
         transacao = {
             'user_id': ObjectId(user_id) if not isinstance(user_id, ObjectId) else user_id,
             'type': tipo,
             'category': categoria.strip(),
             'description': descricao.strip(),
             'value': float(valor),
+            'transaction_date': transaction_date,
             'created_at': created_at,
-            'hour': hour
+            'hour': hour,
+            'account_id': account_id,
         }
+        
+        if not account_id:
+            return "❌ Erro: Não foi possível definir a conta. Cadastre suas contas no dashboard e tente novamente."
         
         # Inserir transação no MongoDB
         try:
             result = coll_transacoes.insert_one(transacao)
             transacao_id = result.inserted_id
+            ultima_transacao_id = str(transacao_id)
+            if state is not None:
+                state["ultima_transacao_id"] = ultima_transacao_id
             print(f"[CADASTRAR_TRANSACAO] Transação cadastrada com sucesso: {transacao_id}")
             
             # Mensagem de confirmação
@@ -841,7 +1185,7 @@ def cadastrar_transacao(valor: float, tipo: str, descricao: str = None, categori
                 f"• Descrição: {descricao.strip()}\n"
                 f"• Categoria: {categoria.strip()}\n"
                 f"• Data: {created_at.strftime('%d/%m/%Y %H:%M')}\n\n"
-                f"A transação já está disponível no seu dashboard! https://leozera.camppoia.com.br/finance/dashboard/ 📊"
+                f"A transação já está disponível no seu dashboard! \nhttps://leozera.camppoia.com.br/finance/dashboard/ 📊"
             )
             
             return mensagem
@@ -855,6 +1199,109 @@ def cadastrar_transacao(valor: float, tipo: str, descricao: str = None, categori
         import traceback
         traceback.print_exc()
         return f"❌ Erro ao cadastrar transação: {str(e)}"
+
+
+def editar_ultima_transacao(
+    user_id: str,
+    ultima_transacao_id: str,
+    value: float = None,
+    category: str = None,
+    description: str = None,
+    transaction_date: str = None,
+    account_id: str = None,
+) -> str:
+    """
+    Atualiza a última transação registrada. Use quando o usuário corrigir algo logo após o registro
+    (ex.: "foi ontem", "na verdade foi 120", "era combustível").
+    Campos editáveis: value, category, description, transaction_date, account_id.
+    """
+    if not ultima_transacao_id or not str(ultima_transacao_id).strip():
+        return "Não encontrei uma transação recente para corrigir."
+    try:
+        updates = {}
+        if value is not None:
+            try:
+                updates["value"] = float(value)
+            except (TypeError, ValueError):
+                pass
+        if category is not None and str(category).strip():
+            updates["category"] = category.strip()
+        if description is not None and str(description).strip():
+            updates["description"] = description.strip()
+        if transaction_date is not None and str(transaction_date).strip():
+            try:
+                dt = parse(transaction_date)
+                if getattr(dt, "tzinfo", None) is None:
+                    dt = pytz.timezone("America/Sao_Paulo").localize(dt)
+                updates["transaction_date"] = dt
+            except (ValueError, TypeError):
+                pass
+        if account_id is not None and str(account_id).strip():
+            updates["account_id"] = account_id.strip()
+
+        if not updates:
+            return "Nenhum campo válido para atualizar. Pode informar o que deseja corrigir?"
+
+        user_id_obj = ObjectId(user_id) if isinstance(user_id, str) else user_id
+        transacao_oid = ObjectId(ultima_transacao_id) if isinstance(ultima_transacao_id, str) else ultima_transacao_id
+
+        result = coll_transacoes.update_one(
+            {"_id": transacao_oid, "user_id": user_id_obj},
+            {"$set": updates},
+        )
+        if result.matched_count == 0:
+            return "Não encontrei uma transação recente para corrigir."
+
+        doc = coll_transacoes.find_one({"_id": transacao_oid, "user_id": user_id_obj})
+        if not doc:
+            return "✏️ Transação atualizada.\nhttps://leozera.camppoia.com.br/finance/dashboard/"
+
+        desc = doc.get("description", "")
+        val = doc.get("value", 0)
+        cat = doc.get("category", "")
+        msg = (
+            "✏️ Transação atualizada\n\n"
+            f"{desc}\n"
+            f"R${val:.2f}\n"
+            f"Categoria: {cat}\n\n"
+            "https://leozera.camppoia.com.br/finance/dashboard/"
+        )
+        return msg.strip()
+    except Exception as e:
+        print(f"[EDITAR_ULTIMA_TRANSACAO] Erro: {e}")
+        return "Não foi possível atualizar a transação. Tente novamente."
+
+
+@tool("editar_ultima_transacao")
+def editar_ultima_transacao_tool(
+    state: dict = None,
+    value: float = None,
+    category: str = None,
+    description: str = None,
+    transaction_date: str = None,
+    account_id: str = None,
+) -> str:
+    """
+    Edita a última transação registrada. Use quando o usuário corrigir algo logo após registrar
+    (ex.: "foi ontem", "na verdade foi 120", "era combustível").
+    Parâmetros: value, category, description, transaction_date, account_id (apenas os que mudaram).
+    """
+    if not state or not state.get("user_info") or not state.get("ultima_transacao_id"):
+        return "Não encontrei uma transação recente para corrigir."
+    user_id = state["user_info"].get("user_id") or state["user_info"].get("_id")
+    ultima_transacao_id = state.get("ultima_transacao_id")
+    if not user_id or not ultima_transacao_id:
+        return "Não encontrei uma transação recente para corrigir."
+    return editar_ultima_transacao(
+        user_id=str(user_id),
+        ultima_transacao_id=str(ultima_transacao_id),
+        value=value,
+        category=category,
+        description=description,
+        transaction_date=transaction_date,
+        account_id=account_id,
+    )
+
 
 def _calcular_periodo(periodo_texto: str) -> tuple:
     """
@@ -2002,6 +2449,7 @@ def confirmar_compromisso(codigo: str, acao: str, state: dict = None) -> str:
 tools = [
     # Transações Financeiras
     cadastrar_transacao,
+    editar_ultima_transacao_tool,
     gerar_relatorio,
     consultar_gasto_categoria,
     # Compromissos / Agenda
@@ -2133,6 +2581,73 @@ class AgentAssistente:
                     "Mantenha o tom humanizado, sem parecer bloqueio técnico."
                 )
 
+            # Carregar categorias e contas do usuário + verificar onboarding inicial
+            contexto_categorias_contas = ""
+            onboarding_text = ""
+            user_doc = None
+            if not bloqueado and user_info.get("status") == "ativo":
+                user_id = user_info.get("user_id") or user_info.get("_id")
+                if user_id:
+                    user_doc = coll_clientes.find_one(
+                        {"_id": ObjectId(user_id) if isinstance(user_id, str) else user_id}
+                    )
+                    if user_doc:
+                        onboarding_enviado = user_doc.get("onboarding_enviado", False)
+                        if not onboarding_enviado:
+                            onboarding_text = (
+                                "👋 Bem-vindo ao Leozera!\n\n"
+                                "Eu sou seu assistente financeiro com IA no WhatsApp.\n\n"
+                                "Comigo você pode:\n\n"
+                                "💸 Registrar gastos\n"
+                                "\"Gastei 40 no mercado\"\n\n"
+                                "💰 Registrar entradas\n"
+                                "\"Recebi 2000 de salário\"\n\n"
+                                "📊 Ver relatórios\n"
+                                "\"Quanto gastei esse mês?\"\n\n"
+                                "📅 Criar compromissos\n"
+                                "\"Agenda dentista amanhã às 14h\"\n\n"
+                                "Seu dashboard financeiro:\n"
+                                "https://leozera.camppoia.com.br/finance/dashboard/\n\n"
+                                "Pode mandar sua primeira transação quando quiser 😉"
+                            )
+                            try:
+                                coll_clientes.update_one(
+                                    {"_id": user_doc["_id"]},
+                                    {"$set": {"onboarding_enviado": True}},
+                                )
+                            except Exception:
+                                pass
+                        categorias_usuario = user_doc.get("categorias", {})
+                        contas_usuario = user_doc.get("contas", [])
+                        todas_categorias = []
+                        for lista in categorias_usuario.values():
+                            todas_categorias.extend(lista)
+                        contas_ativas = [c for c in contas_usuario if c.get("ativa")]
+                        nomes_contas = [c.get("nome", "") for c in contas_ativas if c.get("nome")]
+                        contexto_categorias_contas = (
+                            "\n\n📌 CATEGORIAS E CONTAS DESTE USUÁRIO (use para interpretar mensagens e ao perguntar qual conta):"
+                            f"\n- Categorias disponíveis: {', '.join(todas_categorias) if todas_categorias else 'Nenhuma cadastrada'}"
+                            f"\n- Contas ativas (nomes para reconhecer na frase ou listar ao perguntar): {', '.join(nomes_contas) if nomes_contas else 'Nenhuma cadastrada'}"
+                            "\n- Ao perguntar qual conta foi utilizada, liste as opções entre parênteses. Reconheça menções à conta na mensagem (ex.: 'no c6', 'paguei no santander')."
+                        )
+
+            # Detecção de intenção da última mensagem do usuário (antes da decisão de tool)
+            intent_instrucao = ""
+            if not bloqueado:
+                ultima_msg = None
+                for m in reversed(state.get("messages", [])):
+                    if isinstance(m, HumanMessage):
+                        ultima_msg = (m.content or "").strip() if hasattr(m, "content") else ""
+                        break
+                if ultima_msg:
+                    intencao = classificar_intencao(ultima_msg, state)
+                    if intencao == "correcao_transacao":
+                        intent_instrucao = (
+                            "\n\n🎯 INTENÇÃO DETECTADA: correcao_transacao (usuário está corrigindo a última transação registrada). "
+                            "Use APENAS a tool editar_ultima_transacao com os campos extraídos da mensagem (value, category, description, transaction_date ou account_id). "
+                            "NÃO chame cadastrar_transacao."
+                        )
+
             data_atual = datetime.now().strftime("%d/%m/%Y")
             system_prompt = SystemMessage(
                 content=(
@@ -2147,6 +2662,8 @@ class AgentAssistente:
                     f"\n- Status assinatura: {status_assinatura}"
                     f"{instrucao}"
                     f"{sem_plano_instrucao}"
+                    f"{contexto_categorias_contas}"
+                    f"{intent_instrucao}"
                 )
             )
 
@@ -2155,6 +2672,14 @@ class AgentAssistente:
                 response = llm.invoke([system_prompt] + state["messages"])
             else:
                 response = llm_with_tools.invoke([system_prompt] + state["messages"])
+
+            if onboarding_text:
+                content_atual = getattr(response, "content", "") or ""
+                novo_content = onboarding_text + "\n\n" + content_atual
+                response = AIMessage(
+                    content=novo_content,
+                    tool_calls=getattr(response, "tool_calls", None),
+                )
 
             return {
                 **state,
@@ -2175,6 +2700,7 @@ class AgentAssistente:
             if not getattr(last_message, "tool_calls", None):
                 return state
 
+            safe_state = self._prepare_safe_state(state)
             tool_messages = []
             user_status = state.get("user_info", {}).get("status")
             user_plano = state.get("user_info", {}).get("plano")
@@ -2204,7 +2730,6 @@ class AgentAssistente:
                     continue
 
                 try:
-                    safe_state = self._prepare_safe_state(state)
                     if "state" in tool_func.func.__code__.co_varnames:
                         call["args"]["state"] = safe_state
 
@@ -2226,10 +2751,10 @@ class AgentAssistente:
                         )
                     )
 
-            return {
-                **state,
-                "messages": state["messages"] + tool_messages
-            }
+            out = {**state, "messages": state["messages"] + tool_messages}
+            if safe_state.get("ultima_transacao_id") is not None:
+                out["ultima_transacao_id"] = safe_state["ultima_transacao_id"]
+            return out
 
         # --------------------------------
         # Roteadores

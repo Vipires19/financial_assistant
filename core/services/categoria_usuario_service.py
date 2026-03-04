@@ -100,7 +100,7 @@ class CategoriaUsuarioService:
         categorias[tipo].append(nome)
         
         # Atualiza usuário
-        self.user_repo.update(user_id, {'categorias': categorias})
+        self.user_repo.update(user_id, categorias=categorias)
         
         return True
     
@@ -149,7 +149,7 @@ class CategoriaUsuarioService:
         #     del categorias[tipo]
         
         # Atualiza usuário
-        self.user_repo.update(user_id, {'categorias': categorias})
+        self.user_repo.update(user_id, categorias=categorias)
         
         return True
     
@@ -205,7 +205,7 @@ class CategoriaUsuarioService:
         categorias[tipo][indice] = nome_novo
         
         # Atualiza usuário
-        self.user_repo.update(user_id, {'categorias': categorias})
+        self.user_repo.update(user_id, categorias=categorias)
         
         return True
     

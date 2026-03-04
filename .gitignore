@@ -50,3 +50,5 @@ app_exemplo.py
 .DS_Store
 Thumbs.db
 
+# Patch notes local
+patch_note.md

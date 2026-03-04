@@ -31,7 +31,17 @@
     </script>
     <style>
         /* Paleta oficial Leozera — Azul + Verde Neon (IA vibes) */
+        /* Variáveis de tema Light/Dark — legibilidade e consistência */
         :root {
+            --bg-main: #f5f7fb;
+            --bg-card: #ffffff;
+            --bg-sidebar: #1e293b;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+            --accent-primary: #3b82f6;
+            --accent-success: #22c55e;
+            --accent-danger: #ef4444;
             --primary-blue: #1f2a44;
             --secondary-blue: #2d3e66;
             --accent-blue: #3b82f6;
@@ -42,26 +52,49 @@
             --dark-card: #1e293b;
             --dark-border: #334155;
             --sidebar-width: 260px;
-            --sidebar-bg: var(--primary-blue);
+            --sidebar-bg: var(--bg-sidebar);
             --sidebar-text: #e2e8f0;
             --sidebar-hover: var(--secondary-blue);
             --topbar-height: 60px;
-            --content-bg: #f8fafc;
-            --card-bg: #fff;
-            --card-border: #e5e7eb;
-            --text-primary: #0f172a;
-            --text-muted: #64748b;
+            --content-bg: var(--bg-main);
+            --card-bg: var(--bg-card);
+            --card-border: var(--border-color);
+            --text-muted: var(--text-secondary);
             --radius: 0.75rem;
             --shadow: 0 1px 3px rgba(0,0,0,0.06);
             --shadow-hover: 0 4px 14px rgba(0,0,0,0.08);
         }
+        [data-theme="dark"] {
+            --bg-main: #0f172a;
+            --bg-card: #1e293b;
+            --bg-sidebar: #020617;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --accent-primary: #60a5fa;
+            --accent-success: #4ade80;
+            --accent-danger: #f87171;
+            --content-bg: var(--bg-main);
+            --card-bg: var(--bg-card);
+            --card-border: var(--border-color);
+            --text-muted: var(--text-secondary);
+            --sidebar-bg: var(--bg-sidebar);
+        }
         body.dark-mode {
-            --content-bg: var(--dark-bg);
-            --card-bg: var(--dark-card);
-            --card-border: var(--dark-border);
-            --text-primary: #e2e8f0;
-            --text-muted: #94a3b8;
-            --sidebar-bg: #0a0f1a;
+            --bg-main: #0f172a;
+            --bg-card: #1e293b;
+            --bg-sidebar: #020617;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --accent-primary: #60a5fa;
+            --accent-success: #4ade80;
+            --accent-danger: #f87171;
+            --content-bg: var(--bg-main);
+            --card-bg: var(--bg-card);
+            --card-border: var(--border-color);
+            --text-muted: var(--text-secondary);
+            --sidebar-bg: var(--bg-sidebar);
             --sidebar-hover: var(--primary-blue);
             --shadow: 0 1px 3px rgba(0,0,0,0.25);
             --shadow-hover: 0 4px 14px rgba(0,0,0,0.3);
@@ -76,7 +109,8 @@
             overflow-x: hidden;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             transition: all 0.3s ease;
-            background: var(--content-bg);
+            background: var(--bg-main);
+            color: var(--text-primary);
         }
         .dashboard-wrapper {
             display: flex;
@@ -91,7 +125,7 @@
             min-width: var(--sidebar-width);
             min-height: 100vh;
             height: auto;
-            background: var(--sidebar-bg);
+            background: var(--bg-sidebar);
             color: var(--sidebar-text);
             position: fixed;
             left: 0;
@@ -241,17 +275,45 @@
             margin: 0;
             margin-left: 0;
         }
-        /* Cards — branco no claro, dark-card no dark; bordas arredondadas, sombra suave */
-        .card-dashboard {
-            background: var(--card-bg);
-            border-radius: var(--radius);
+        /* Cards — fundo e borda via variáveis de tema; micro-interação no hover */
+        .card-dashboard,
+        .card,
+        .dashboard-card {
+            background: var(--bg-card);
+            border-radius: 12px;
             box-shadow: var(--shadow);
-            border: 1px solid var(--card-border);
-            transition: all 0.3s ease;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
         }
         .card-dashboard:hover {
-            box-shadow: var(--shadow-hover);
-            transform: translateY(-2px) scale(1.02);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        }
+        body.dark-mode .card-dashboard:hover {
+            box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+        }
+        /* Card de saldo — gradiente e borda suave */
+        .balance-card,
+        .dashboard-finance-content div:has(#saldoTotal) {
+            background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(59,130,246,0.02));
+            border: 1px solid rgba(59,130,246,0.2);
+        }
+        /* Indicador lateral nos cards de conta */
+        .account-card,
+        #accountsList > * {
+            position: relative;
+            padding-left: 14px;
+        }
+        .account-card::before,
+        #accountsList > *::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 4px;
+            border-radius: 4px;
+            background: #3b82f6;
         }
         /* Botões principais — neon green, texto escuro, hover com glow */
         .btn-neon {
@@ -266,11 +328,30 @@
             box-shadow: 0 0 12px var(--neon-glow);
             transform: scale(1.02);
         }
-        .dashboard-finance-content.bg-gray-50 { background: var(--content-bg); }
-        body.dark-mode .dashboard-finance-content .bg-white { background: var(--card-bg); border-color: var(--card-border); }
-        body.dark-mode .dashboard-finance-content .text-gray-900 { color: var(--text-primary); }
+        .dashboard-finance-content.bg-gray-50 { background: var(--bg-main); }
+        body.dark-mode .dashboard-finance-content .bg-gray-50,
+        [data-theme="dark"] .dashboard-finance-content .bg-gray-50 { background: var(--bg-card); }
+        body.dark-mode .dashboard-finance-content .bg-white,
+        [data-theme="dark"] .dashboard-finance-content .bg-white { background: var(--bg-card); border-color: var(--border-color); }
+        body.dark-mode .dashboard-finance-content .text-gray-900,
+        [data-theme="dark"] .dashboard-finance-content .text-gray-900 { color: var(--text-primary); }
+        body.dark-mode .dashboard-finance-content .text-gray-500,
         body.dark-mode .dashboard-finance-content .text-gray-600,
-        body.dark-mode .dashboard-finance-content .text-gray-700 { color: var(--text-muted); }
+        body.dark-mode .dashboard-finance-content .text-gray-700,
+        [data-theme="dark"] .dashboard-finance-content .text-gray-500,
+        [data-theme="dark"] .dashboard-finance-content .text-gray-600,
+        [data-theme="dark"] .dashboard-finance-content .text-gray-700 { color: var(--text-secondary); }
+        /* Bordas visuais — tema (evitar bordas invisíveis no dark mode) */
+        .content-area .border-gray-200,
+        .dashboard-finance-content .border-gray-200 { border-color: var(--border-color); }
+        body.dark-mode .border-gray-200,
+        [data-theme="dark"] .border-gray-200 { border-color: var(--border-color); }
+        .content-area .divide-gray-200 > * + *,
+        .dashboard-finance-content .divide-gray-200 > * + * { border-color: var(--border-color); }
+        body.dark-mode .divide-gray-200 > * + *,
+        [data-theme="dark"] .divide-gray-200 > * + * { border-color: var(--border-color); }
+        /* Texto secundário utilitário */
+        .text-muted { color: var(--text-secondary); }
         @media (max-width: 991.98px) {
             .sidebar { transform: translateX(-100%); }
             .sidebar.show { transform: translateX(0); }
@@ -309,6 +390,56 @@
             to { opacity: 1; transform: translateY(0); }
         }
         .content-area .card-dashboard { animation: fadeIn 0.35s ease; }
+
+        /* Hierarquia visual — saldo total no dashboard */
+        .dashboard-finance-content #saldoTotal {
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .dashboard-finance-content #saldoTotal + p {
+            font-size: 13px;
+            opacity: 0.7;
+        }
+        /* Espaçamento vertical das seções */
+        .dashboard-section {
+            margin-bottom: 28px;
+        }
+
+        /* DARK MODE GLOBAL OVERRIDES */
+        body.dark-mode .bg-white {
+            background-color: #1e293b !important;
+        }
+        body.dark-mode .bg-gray-50 {
+            background-color: #0f172a !important;
+        }
+        body.dark-mode .text-gray-900,
+        body.dark-mode .text-gray-800,
+        body.dark-mode .text-gray-700 {
+            color: #f1f5f9 !important;
+        }
+        body.dark-mode .text-gray-600,
+        body.dark-mode .text-gray-500 {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .border-gray-200,
+        body.dark-mode .border-gray-300 {
+            border-color: #334155 !important;
+        }
+        body.dark-mode .shadow-sm,
+        body.dark-mode .shadow {
+            box-shadow: 0 0 0 rgba(0,0,0,0);
+        }
+        body.dark-mode .card-dashboard {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode select,
+        body.dark-mode input {
+            background-color: #020617 !important;
+            color: #f1f5f9 !important;
+            border-color: #334155 !important;
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -336,6 +467,7 @@
                         <ul class="submenu list-unstyled mb-0">
                             <li><a href="{% url 'finance:criar-transacao' %}" class="{% if 'transacoes/criar' in request.path %}active{% endif %}"><i class="bi bi-plus-circle me-2"></i>Novo Lançamento</a></li>
                             <li><a href="{% url 'finance:categorias' %}" class="{% if 'categorias' in request.path %}active{% endif %}"><i class="bi bi-tags me-2"></i>Categorias</a></li>
+                            <li><a href="{% url 'finance:contas' %}" class="{% if 'contas' in request.path %}active{% endif %}"><i class="bi bi-bank me-2"></i>Contas</a></li>
                             <li><a href="{% url 'finance:report' %}" class="{% if 'report' in request.path %}active{% endif %}"><i class="bi bi-file-earmark-bar-graph me-2"></i>Relatórios</a></li>
                         </ul>
                     </div>
@@ -351,6 +483,9 @@
                     <a href="{% url 'core:planos' %}" class="nav-link d-flex align-items-center {% if request.path == '/planos/' %}active{% endif %}">
                         <i class="bi bi-credit-card"></i> Planos
                     </a>
+                    <a href="{% url 'finance:plano' %}" class="nav-link d-flex align-items-center {% if request.path == '/finance/plano/' %}active{% endif %}">
+                        <i class="bi bi-person-badge"></i> Plano
+                    </a>
                     <a href="{% url 'core:configuracoes' %}" class="nav-link d-flex align-items-center {% if request.path == '/configuracoes/' %}active{% endif %}">
                         <i class="bi bi-gear"></i> Configurações
                     </a>
@@ -365,18 +500,22 @@
                     <span class="text-lg">🐞</span> Relatar Bug
                 </a>
             </div>
-            <!-- Badge de plano (rodapé fixo da sidebar) — plano vindo do contexto (banco) -->
+            <!-- Badge de plano (rodapé fixo da sidebar) — lê de user_mongo.assinatura.plano -->
             <div class="sidebar-plan-badge mt-auto">
-                {% if plano == "trial" %}
-                    <div id="trialBadgeText" data-vencimento="{% if data_vencimento_plano %}{{ data_vencimento_plano|date:'Y-m-d' }}{% endif %}">
-                        Trial – <span id="trialDaysLeft">—</span> dias restantes
-                    </div>
-                {% elif plano == "mensal" %}
-                    <div>💎 Plano Mensal Ativo</div>
-                {% elif plano == "anual" %}
-                    <div>💎 Plano Anual Ativo</div>
+                {% if request.user_mongo and request.user_mongo.assinatura and request.user_mongo.assinatura.plano and request.user_mongo.assinatura.plano != "sem_plano" %}
+                    {% if request.user_mongo.assinatura.plano == "trial" %}
+                        <div id="trialBadgeText" data-vencimento="{% if request.user_mongo.assinatura.proximo_vencimento %}{{ request.user_mongo.assinatura.proximo_vencimento|date:'Y-m-d' }}{% endif %}">
+                            Trial – <span id="trialDaysLeft">—</span> dias restantes
+                        </div>
+                    {% elif request.user_mongo.assinatura.plano == "mensal" %}
+                        <div>💎 Plano Mensal Ativo</div>
+                    {% elif request.user_mongo.assinatura.plano == "anual" %}
+                        <div>💎 Plano Anual Ativo</div>
+                    {% else %}
+                        <div class="plano-ativo">Plano {{ request.user_mongo.assinatura.plano|title }} ativo</div>
+                    {% endif %}
                 {% else %}
-                    <div class="d-flex flex-column gap-2">
+                    <div class="d-flex flex-column gap-2 plano-inativo">
                         <span>Sem plano ativo</span>
                         <a href="{% url 'core:planos' %}" class="btn btn-ver-planos text-decoration-none align-self-start">Ver planos</a>
                     </div>

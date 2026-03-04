@@ -69,8 +69,10 @@ const calendario = {
             events: this.fetchEvents.bind(this),
             eventClassNames: (arg) => [arg.event.extendedProps?.status || 'pendente'],
             eventContent: function(arg) {
+                const title = arg.event.title || '';
+                const titleEscaped = title.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 return {
-                    html: '<div class="fc-event-modern"><div class="fc-event-title">' + (arg.event.title || '') + '</div><div class="fc-event-time">' + (arg.timeText || '') + '</div></div>'
+                    html: '<div class="fc-event-modern"><div class="fc-event-title" title="' + titleEscaped + '">' + (title || '') + '</div><div class="fc-event-time">' + (arg.timeText || '') + '</div></div>'
                 };
             },
             viewDidMount: (view) => {

@@ -1,0 +1,1 @@
+# Scripts do app core

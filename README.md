@@ -88,6 +88,59 @@ Usuários podem:
 
 Esses tickets são enviados por email.
 
+### Assistente Financeiro com IA
+- Registro de despesas via linguagem natural
+- Interpretação automática de categorias
+- Reconhecimento de contas do usuário
+- Correção de transações
+- Geração de relatórios financeiros
+
+### Dashboard Financeiro
+- Evolução do saldo
+- Gastos por categoria
+- Gastos por dia da semana
+- Gastos por horário
+- Distribuição de despesas
+- Despesas por conta
+
+### Sistema de Assinaturas
+- Planos recorrentes via Mercado Pago
+- Página de gerenciamento de plano
+- Cancelamento de assinatura
+- Worker automático de downgrade
+- Controle de acesso no agent baseado no plano
+
+### Agenda Inteligente
+- Criação de compromissos
+- Confirmação automática
+- Lembretes de 12h e 1h via WhatsApp
+
+### Automação
+- Workers Celery para:
+  - lembretes
+  - verificação de trial
+  - verificação de plano vencido
+
+### Gerenciamento de Assinatura
+O sistema inclui controle completo de assinatura do usuário:
+
+- Página **Meu Plano** para visualizar:
+  - plano atual
+  - status da assinatura
+  - próximo vencimento
+- Cancelamento de assinatura integrado ao Mercado Pago.
+- Worker automático que encerra planos vencidos.
+- Verificação de plano ativo no agente de IA.
+
+### Landing Page
+A landing page inclui:
+
+- Apresentação dos planos disponíveis
+- Cards de plano com destaque visual
+- Trial gratuito de 7 dias
+- Plano mensal e anual
+- Seção de perguntas frequentes
+
 ---
 
 # Stack tecnológica
