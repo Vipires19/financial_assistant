@@ -182,9 +182,34 @@ A landing page inclui:
 
 # Versionamento
 
-**Versão atual:** `v0.4.0`
+**Versão atual:** `v0.4.1`
 
 ## Versões
+
+### v0.4.1
+
+Principais mudanças:
+
+* Implementação completa do sistema de onboarding do usuário
+* Modal inicial explicando o funcionamento do Leozera
+* Explicação de como funcionam as contas financeiras
+* Explicação de como funciona o cartão de crédito (fatura vs saldo)
+* Checklist automático de primeiros passos no dashboard
+* Detecção automática de:
+
+  * criação da primeira conta
+  * primeira transação registrada
+  * primeira análise financeira gerada
+* Exibição automática de card de "Setup concluído" após completar o checklist
+* Implementação de tour guiado do dashboard
+* Tour explica:
+
+  * saldo total
+  * categoria com maior gasto
+  * análise financeira da IA
+* Correção do posicionamento do tooltip do tour
+* Correção do timing de inicialização do tour após carregamento completo do dashboard
+* Melhorias de UX no fluxo inicial do usuário
 
 ### v0.4.0
 

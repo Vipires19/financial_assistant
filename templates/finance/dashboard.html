@@ -79,76 +79,84 @@
 
         <!-- Cards de Métricas -->
         <div class="dashboard-section grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            <!-- Card: Gastos -->
-            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-600">Despesas Totais</p>
-                        <p class="text-2xl font-bold text-red-600 mt-1" id="totalExpenses">
-                            R$ 0,00
-                        </p>
+            <!-- Resumo do Período: agrupa as 4 métricas principais -->
+            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-6 lg:col-span-2">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    Resumo do Período
+                </h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <!-- Card: Despesas Totais -->
+                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-600">Despesas Totais</p>
+                                <p class="text-2xl font-bold text-red-600 mt-1" id="totalExpenses">
+                                    R$ 0,00
+                                </p>
+                            </div>
+                            <div class="bg-red-100 rounded-full p-3">
+                                <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
+                                </svg>
+                            </div>
+                        </div>
                     </div>
-                    <div class="bg-red-100 rounded-full p-3">
-                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
-                        </svg>
+                    <!-- Card: Receitas Totais -->
+                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-600">Receitas Totais</p>
+                                <p class="text-2xl font-bold text-green-600 mt-1" id="totalIncome">
+                                    R$ 0,00
+                                </p>
+                            </div>
+                            <div class="bg-green-100 rounded-full p-3">
+                                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Card: Resultado do Período -->
+                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-600">Resultado do Período</p>
+                                <p class="text-2xl font-bold mt-1" id="balance">
+                                    R$ 0,00
+                                </p>
+                            </div>
+                            <div class="bg-primary-100 rounded-full p-3">
+                                <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Card: Taxa de Economia -->
+                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-600">Taxa de Economia</p>
+                                <p class="text-2xl font-bold mt-1" id="savingsRate">
+                                    0%
+                                </p>
+                            </div>
+                            <div class="bg-blue-100 rounded-full p-3">
+                                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V6m0 12v-2"></path>
+                                </svg>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Card: Entradas -->
-            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-600">Receitas Totais</p>
-                        <p class="text-2xl font-bold text-green-600 mt-1" id="totalIncome">
-                            R$ 0,00
-                        </p>
-                    </div>
-                    <div class="bg-green-100 rounded-full p-3">
-                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                        </svg>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Card: Saldo -->
-            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-600">Resultado do Período</p>
-                        <p class="text-2xl font-bold mt-1" id="balance">
-                            R$ 0,00
-                        </p>
-                    </div>
-                    <div class="bg-primary-100 rounded-full p-3">
-                        <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                        </svg>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Card: Taxa de Economia -->
-            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-600">Taxa de Economia</p>
-                        <p class="text-2xl font-bold mt-1" id="savingsRate">
-                            0%
-                        </p>
-                    </div>
-                    <div class="bg-blue-100 rounded-full p-3">
-                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V6m0 12v-2"></path>
-                        </svg>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Card: Saúde Financeira -->
+            <!-- GRUPO 1 — Situação Financeira -->
+            <h3 class="text-lg font-semibold text-gray-900 mt-6 mb-4 col-span-full">
+                Situação Financeira
+            </h3>
             <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <p class="text-sm font-medium text-gray-600 mb-2">Saúde Financeira</p>
 
@@ -164,7 +172,88 @@
                 </p>
             </div>
 
-            <!-- Card: Gastos vs mês anterior -->
+            <!-- GRUPO 2 — Comportamento de Gastos -->
+            <h3 class="text-lg font-semibold text-gray-900 mt-6 mb-4 col-span-full">
+                Comportamento de Gastos
+            </h3>
+            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Dia com Maior Gasto</p>
+                        <p class="text-lg font-semibold text-gray-900 mt-1" id="dayHighestExpense">
+                            -
+                        </p>
+                    </div>
+                    <div class="bg-blue-100 rounded-full p-3">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Categoria com Maior Gasto</p>
+                        <p class="text-lg font-semibold text-gray-900 mt-1" id="categoryHighestExpense">
+                            -
+                        </p>
+                        <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                            <div id="categoryExpenseBar"
+                                 class="h-2 rounded-full bg-purple-500"
+                                 style="width:0%">
+                            </div>
+                        </div>
+                        <p id="categoryAlert"
+                           class="text-xs text-red-600 mt-2 hidden">
+                        </p>
+                    </div>
+                    <div class="bg-purple-100 rounded-full p-3">
+                        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Conta com Mais Gastos</p>
+                        <p class="text-lg font-semibold text-gray-900 mt-1" id="topAccount">
+                            -
+                        </p>
+                    </div>
+                    <div class="bg-indigo-100 rounded-full p-3">
+                        <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 10h18M7 15h1m4 0h1m-9 4h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Horário com Maior Gasto</p>
+                        <p class="text-lg font-semibold text-gray-900 mt-1" id="hourHighestExpense">
+                            -
+                        </p>
+                    </div>
+                    <div class="bg-yellow-100 rounded-full p-3">
+                        <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GRUPO 3 — Tendências Financeiras -->
+            <h3 class="text-lg font-semibold text-gray-900 mt-6 mb-4 col-span-full">
+                Tendências Financeiras
+            </h3>
             <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <div class="flex items-center justify-between">
                     <div>
@@ -190,7 +279,6 @@
                 </div>
             </div>
 
-            <!-- Card: Velocidade do dinheiro -->
             <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <div class="flex items-center justify-between">
                     <div>
@@ -217,84 +305,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Card: Dia com Maior Gasto -->
-            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-600">Dia com Maior Gasto</p>
-                        <p class="text-lg font-semibold text-gray-900 mt-1" id="dayHighestExpense">
-                            -
-                        </p>
-                    </div>
-                    <div class="bg-blue-100 rounded-full p-3">
-                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                        </svg>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Card: Categoria com Maior Gasto -->
-            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-600">Categoria com Maior Gasto</p>
-                        <p class="text-lg font-semibold text-gray-900 mt-1" id="categoryHighestExpense">
-                            -
-                        </p>
-                        <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
-                            <div id="categoryExpenseBar"
-                                 class="h-2 rounded-full bg-purple-500"
-                                 style="width:0%">
-                            </div>
-                        </div>
-                        <p id="categoryAlert"
-                           class="text-xs text-red-600 mt-2 hidden">
-                        </p>
-                    </div>
-                    <div class="bg-purple-100 rounded-full p-3">
-                        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
-                        </svg>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Card: Conta com Mais Gastos -->
-            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-600">Conta com Mais Gastos</p>
-                        <p class="text-lg font-semibold text-gray-900 mt-1" id="topAccount">
-                            -
-                        </p>
-                    </div>
-                    <div class="bg-indigo-100 rounded-full p-3">
-                        <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M3 10h18M7 15h1m4 0h1m-9 4h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-                        </svg>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Card: Horário com Maior Gasto -->
-            <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-600">Horário com Maior Gasto</p>
-                        <p class="text-lg font-semibold text-gray-900 mt-1" id="hourHighestExpense">
-                            -
-                        </p>
-                    </div>
-                    <div class="bg-yellow-100 rounded-full p-3">
-                        <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <div class="dashboard-section bg-white border border-blue-200 rounded-xl p-5 shadow-sm mb-6">
@@ -303,6 +313,9 @@
             </h3>
 
             <div id="aiInsightText" class="space-y-3 text-sm text-gray-700">
+                <div id="aiInsightHeadline"
+                     class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 text-sm font-medium text-blue-800 hidden">
+                </div>
                 <p class="text-gray-500">
                     Gerando análise financeira...
                 </p>
@@ -312,8 +325,34 @@
         <!-- Top Gastos do Período -->
         <div class="dashboard-section card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <h3 class="text-lg font-semibold text-gray-900 mb-3">Top Gastos do Período</h3>
-            <div id="topExpenseCategoriesList" class="text-sm text-gray-700">
+            <div id="topExpenseCategoriesList" class="text-sm text-gray-700 top-expense-ranking">
                 Carregando...
+            </div>
+        </div>
+
+        <!-- Checklist Primeiros Passos -->
+        <div id="onboardingChecklistSection" class="dashboard-section">
+            <div id="onboardingChecklist" class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Primeiros passos</h3>
+                <p class="text-sm text-gray-600 mb-4">Complete os passos abaixo para configurar seu Leozera.</p>
+                <ul class="space-y-3 text-sm text-gray-700">
+                    <li class="flex items-center gap-2">
+                        <span id="checklistAccount" class="checklist-box" aria-hidden="true">☐</span>
+                        <span>Criar sua primeira conta</span>
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <span id="checklistTransaction" class="checklist-box" aria-hidden="true">☐</span>
+                        <span>Registrar sua primeira transação</span>
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <span id="checklistInsight" class="checklist-box" aria-hidden="true">☐</span>
+                        <span>Ver sua análise financeira</span>
+                    </li>
+                </ul>
+            </div>
+            <div id="onboardingCompleted" class="card-dashboard bg-white rounded-lg shadow-sm border border-green-200 p-4 hidden">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">🎉 Setup concluído</h3>
+                <p class="text-sm text-gray-600">Seu Leozera já está configurado.<br>Agora você pode acompanhar para onde seu dinheiro está indo.</p>
             </div>
         </div>
 
@@ -511,6 +550,77 @@
                     Fechar
                 </button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Onboarding (primeiro acesso) -->
+<div id="onboardingModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+        </div>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-6 pt-6 pb-4 sm:p-6">
+                <!-- Slide 1 -->
+                <div class="onboarding-slide" data-slide="1">
+                    <h3 class="text-xl font-semibold text-gray-900 mb-3">Bem-vindo ao Leozera</h3>
+                    <p class="text-gray-600 text-sm mb-6">Seu assistente financeiro inteligente para entender para onde seu dinheiro está indo.</p>
+                    <div class="flex justify-end">
+                        <button type="button" class="onboarding-next btn-neon px-4 py-2 text-sm font-medium rounded-md">Próximo</button>
+                    </div>
+                </div>
+                <!-- Slide 2 -->
+                <div class="onboarding-slide hidden" data-slide="2">
+                    <h3 class="text-xl font-semibold text-gray-900 mb-3">Como funcionam as contas</h3>
+                    <p class="text-gray-600 text-sm mb-2">No Leozera as contas representam onde seu dinheiro está.</p>
+                    <p class="text-gray-600 text-sm mb-2">Exemplos:</p>
+                    <ul class="list-disc list-inside text-gray-600 text-sm mb-2 space-y-1">
+                        <li>Conta bancária</li>
+                        <li>Dinheiro</li>
+                        <li>Carteiras digitais</li>
+                    </ul>
+                    <p class="text-gray-600 text-sm mb-6">Quando você registra um gasto, precisa informar de qual conta saiu o dinheiro.</p>
+                    <div class="flex justify-between">
+                        <button type="button" class="onboarding-prev px-4 py-2 text-sm font-medium border border-gray-300 rounded-md hover:bg-gray-50">Voltar</button>
+                        <button type="button" class="onboarding-next btn-neon px-4 py-2 text-sm font-medium rounded-md">Próximo</button>
+                    </div>
+                </div>
+                <!-- Slide 3 -->
+                <div class="onboarding-slide hidden" data-slide="3">
+                    <h3 class="text-xl font-semibold text-gray-900 mb-3">Cartão de crédito funciona diferente</h3>
+                    <p class="text-gray-600 text-sm mb-2">Gastos no cartão não reduzem seu saldo imediatamente.</p>
+                    <p class="text-gray-600 text-sm mb-2">Eles acumulam na fatura do cartão.</p>
+                    <p class="text-gray-600 text-sm mb-6">Quando você paga a fatura, o valor sai da sua conta bancária.</p>
+                    <div class="flex justify-between">
+                        <button type="button" class="onboarding-prev px-4 py-2 text-sm font-medium border border-gray-300 rounded-md hover:bg-gray-50">Voltar</button>
+                        <button type="button" class="onboarding-next btn-neon px-4 py-2 text-sm font-medium rounded-md">Próximo</button>
+                    </div>
+                </div>
+                <!-- Slide 4 -->
+                <div class="onboarding-slide hidden" data-slide="4">
+                    <h3 class="text-xl font-semibold text-gray-900 mb-3">Pronto para começar</h3>
+                    <p class="text-gray-600 text-sm mb-2">Agora cadastre suas contas e registre suas primeiras despesas.</p>
+                    <p class="text-gray-600 text-sm mb-6">Assim o Leozera poderá analisar seu comportamento financeiro.</p>
+                    <div class="flex justify-between">
+                        <button type="button" class="onboarding-prev px-4 py-2 text-sm font-medium border border-gray-300 rounded-md hover:bg-gray-50">Voltar</button>
+                        <button type="button" id="onboardingFinish" class="btn-neon px-4 py-2 text-sm font-medium rounded-md">Começar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tour guiado do dashboard -->
+<div id="dashboardTour" class="fixed inset-0 z-50 hidden">
+    <div class="tour-overlay fixed inset-0 z-40" style="background: rgba(0,0,0,0.5);"></div>
+    <div id="dashboardTourTooltip" class="fixed bg-white shadow-lg rounded-lg p-4 hidden z-[60]" style="max-width: 320px; z-index: 51;">
+        <p id="dashboardTourText" class="text-sm text-gray-700 mb-4 whitespace-pre-line"></p>
+        <div class="flex gap-2 justify-end flex-wrap">
+            <button type="button" id="dashboardTourBack" class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 hidden">Voltar</button>
+            <button type="button" id="dashboardTourNext" class="px-3 py-1.5 text-sm font-medium rounded-lg btn-neon">Próximo</button>
+            <button type="button" id="dashboardTourFinish" class="px-3 py-1.5 text-sm font-medium rounded-lg btn-neon hidden">Concluir</button>
         </div>
     </div>
 </div>
@@ -770,25 +880,81 @@ async function loadDashboardData() {
             document.getElementById('hourHighestExpense').textContent = 'N/A';
         }
 
-        // Top 3 categorias com maior gasto no período
+        // Top 3 categorias com maior gasto no período (ranking com barras)
         const topCategoriesEl = document.getElementById('topExpenseCategoriesList');
         if (topCategoriesEl) {
             const topCategories = data.top_expense_categories || [];
             const medals = ['🥇', '🥈', '🥉'];
             if (topCategories.length > 0) {
-                topCategoriesEl.innerHTML = topCategories.map((item, i) =>
-                    `${medals[i] || ''} ${item.category} — ${formatCurrency(item.total)}`
-                ).join('<br>');
+                topCategoriesEl.innerHTML = topCategories.map((item, i) => {
+                    const percent = expenses > 0
+                        ? ((item.total / expenses) * 100).toFixed(1)
+                        : 0;
+                    return `
+        <div class="mb-3">
+            <div class="flex justify-between text-sm mb-1">
+                <span>${medals[i] || ''} ${item.category}</span>
+                <span>${formatCurrency(item.total)}</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div
+                    class="bg-purple-500 h-2 rounded-full"
+                    style="width:${percent}%">
+                </div>
+            </div>
+        </div>
+    `;
+                }).join('');
             } else {
                 topCategoriesEl.textContent = 'Sem dados no período.';
             }
         }
+
+        // Atualiza checklist de primeiros passos
+        updateOnboardingChecklist({ accounts: data.accounts, transactions: data.transactions });
 
         // Não atualiza tabela aqui - ela tem sua própria paginação
         // A tabela será carregada separadamente via loadTransactions()
 
     } catch (error) {
         console.error('Erro ao carregar dados:', error);
+    }
+}
+
+// Estado do checklist de primeiros passos (atualizado por loadDashboardData, loadAccountBalances e loadInsights)
+var onboardingChecklistState = { hasAccount: false, hasTransaction: false, hasInsight: false };
+
+function updateOnboardingChecklist(opts) {
+    if (localStorage.getItem('leozera_onboarding_completed') === 'true') {
+        var checklistEl = document.getElementById('onboardingChecklist');
+        var completedEl = document.getElementById('onboardingCompleted');
+        if (checklistEl) checklistEl.classList.add('hidden');
+        if (completedEl) completedEl.classList.remove('hidden');
+        return;
+    }
+    if (opts && opts.accounts !== undefined) {
+        onboardingChecklistState.hasAccount = Array.isArray(opts.accounts) && opts.accounts.length > 0;
+    }
+    if (opts && opts.transactions !== undefined) {
+        onboardingChecklistState.hasTransaction = Array.isArray(opts.transactions) && opts.transactions.length > 0;
+    }
+    var insightEl = document.getElementById('aiInsightText');
+    var insightText = insightEl ? (insightEl.textContent || insightEl.innerText || '').trim() : '';
+    onboardingChecklistState.hasInsight = insightText.length > 0 && insightText.indexOf('Gerando análise financeira') === -1;
+
+    var accountBox = document.getElementById('checklistAccount');
+    var transactionBox = document.getElementById('checklistTransaction');
+    var insightBox = document.getElementById('checklistInsight');
+    if (accountBox) accountBox.textContent = onboardingChecklistState.hasAccount ? '☑' : '☐';
+    if (transactionBox) transactionBox.textContent = onboardingChecklistState.hasTransaction ? '☑' : '☐';
+    if (insightBox) insightBox.textContent = onboardingChecklistState.hasInsight ? '☑' : '☐';
+
+    if (onboardingChecklistState.hasAccount && onboardingChecklistState.hasTransaction && onboardingChecklistState.hasInsight) {
+        localStorage.setItem('leozera_onboarding_completed', 'true');
+        var checklistEl = document.getElementById('onboardingChecklist');
+        var completedEl = document.getElementById('onboardingCompleted');
+        if (checklistEl) checklistEl.classList.add('hidden');
+        if (completedEl) completedEl.classList.remove('hidden');
     }
 }
 
@@ -1412,16 +1578,31 @@ async function loadTransactions(page = 1, limit = 20) {
 // Atualiza texto do sub-greeting conforme o período selecionado
 function updateDashboardSubGreeting() {
     const periodFilterEl = document.getElementById('periodFilter');
+    const monthFilterEl = document.getElementById('monthFilter');
+    const yearFilterEl = document.getElementById('yearFilter');
     const subGreetingEl = document.getElementById('dashboardSubGreeting');
     if (!periodFilterEl || !subGreetingEl) return;
+
     const period = periodFilterEl.value;
-    const messages = {
-        'diário': 'Aqui está o resumo do seu dia até agora.',
-        'semanal': 'Aqui está o resumo da sua semana até agora.',
-        'mensal': 'Aqui está o resumo do seu mês até agora.',
-        'anual': 'Aqui está o resumo do seu ano até agora.'
-    };
-    subGreetingEl.textContent = messages[period] || 'Aqui está o seu resumo financeiro até agora.';
+    const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+    let text;
+    if (period === 'diário') {
+        text = 'Resumo financeiro de hoje';
+    } else if (period === 'semanal') {
+        text = 'Resumo financeiro da semana';
+    } else if (period === 'anual' && yearFilterEl) {
+        const year = yearFilterEl.value || new Date().getFullYear();
+        text = 'Resumo financeiro de ' + year;
+    } else if (period === 'mensal' && monthFilterEl && yearFilterEl) {
+        const monthVal = monthFilterEl.value || String(new Date().getMonth() + 1);
+        const year = yearFilterEl.value || new Date().getFullYear();
+        const monthName = monthNames[parseInt(monthVal, 10) - 1] || monthVal;
+        text = 'Resumo financeiro de ' + monthName + ' de ' + year;
+    } else {
+        text = 'Resumo financeiro até agora.';
+    }
+    subGreetingEl.textContent = text;
 }
 
 async function loadInsights() {
@@ -1439,7 +1620,15 @@ async function loadInsights() {
         const response = await fetch(url);
         const data = await response.json();
 
+        const hasHeadline = data.categoria_dominante != null && data.percentual_categoria != null;
+        const headlineText = hasHeadline
+            ? `Seu maior gasto neste período foi em ${data.categoria_dominante} (${data.percentual_categoria}%).`
+            : '';
+        const headlineClass = 'bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 text-sm font-medium text-blue-800' + (hasHeadline ? '' : ' hidden');
+
         document.getElementById('aiInsightText').innerHTML = `
+<div id="aiInsightHeadline" class="${headlineClass}">${headlineText}</div>
+
 <div>
     <span class="font-semibold text-gray-800">Diagnóstico</span>
     <p class="text-gray-600">${data.diagnostico || '-'}</p>
@@ -1460,6 +1649,7 @@ async function loadInsights() {
     <p class="text-gray-600">${data.recomendacao || '-'}</p>
 </div>
 `;
+        updateOnboardingChecklist();
     } catch (error) {
         console.error("Erro ao carregar insights:", error);
     }
@@ -1514,6 +1704,7 @@ async function loadAccountBalances() {
                 creditCardsListEl.innerHTML = '';
             }
         }
+        updateOnboardingChecklist({ accounts: accounts });
     } catch (error) {
         console.error('Erro ao carregar saldos:', error);
         saldoTotalEl.textContent = formatCurrency(0);
@@ -1801,6 +1992,60 @@ document.getElementById('addCategoryForm').addEventListener('submit', async (e) 
     await addCategory();
 });
 
+// ===== ONBOARDING (primeiro acesso) =====
+(function onboardingInit() {
+    var currentOnboardingSlide = 1;
+    var totalOnboardingSlides = 4;
+    var modalEl = document.getElementById('onboardingModal');
+    var slides = document.querySelectorAll('.onboarding-slide');
+
+    function goToOnboardingSlide(n) {
+        if (n < 1 || n > totalOnboardingSlides) return;
+        currentOnboardingSlide = n;
+        slides.forEach(function(slide) {
+            var num = parseInt(slide.getAttribute('data-slide'), 10);
+            if (num === n) {
+                slide.classList.remove('hidden');
+            } else {
+                slide.classList.add('hidden');
+            }
+        });
+    }
+
+    function showOnboardingIfFirstAccess() {
+        if (!localStorage.getItem('leozera_onboarding_seen') && modalEl) {
+            modalEl.classList.remove('hidden');
+            goToOnboardingSlide(1);
+        }
+    }
+
+    if (modalEl) {
+        modalEl.querySelectorAll('.onboarding-next').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                if (currentOnboardingSlide < totalOnboardingSlides) {
+                    goToOnboardingSlide(currentOnboardingSlide + 1);
+                }
+            });
+        });
+        modalEl.querySelectorAll('.onboarding-prev').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                if (currentOnboardingSlide > 1) {
+                    goToOnboardingSlide(currentOnboardingSlide - 1);
+                }
+            });
+        });
+        var finishBtn = document.getElementById('onboardingFinish');
+        if (finishBtn) {
+            finishBtn.addEventListener('click', function() {
+                localStorage.setItem('leozera_onboarding_seen', 'true');
+                modalEl.classList.add('hidden');
+            });
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', showOnboardingIfFirstAccess);
+})();
+
 // Popula o select de ano (ano atual até ano atual - 4) e define mês atual como padrão
 function initFilterSelects() {
     const yearSelect = document.getElementById('yearFilter');
@@ -1823,12 +2068,133 @@ function initFilterSelects() {
     }
 }
 
+// ===== TOUR GUIADO DO DASHBOARD =====
+var dashboardTourStep = 0;
+var dashboardTourSteps = [
+    { target: '#saldoTotal', text: 'Este é o seu saldo total.\nAqui você vê quanto dinheiro possui nas suas contas.' },
+    { target: '#categoryHighestExpense', text: 'Aqui você descobre para onde seu dinheiro está indo.\nEssa é a categoria que mais consome seus gastos.' },
+    { target: '#aiInsightText', text: 'Aqui o Leozera analisa seu comportamento financeiro\ne gera recomendações automáticas.' }
+];
+
+function positionDashboardTourTooltip(stepIndex) {
+
+var tooltip = document.getElementById('dashboardTourTooltip');
+var textEl = document.getElementById('dashboardTourText');
+var backBtn = document.getElementById('dashboardTourBack');
+var nextBtn = document.getElementById('dashboardTourNext');
+var finishBtn = document.getElementById('dashboardTourFinish');
+
+if (!tooltip || !textEl) return;
+
+var step = dashboardTourSteps[stepIndex];
+var targetEl = document.querySelector(step.target);
+
+textEl.textContent = step.text;
+
+backBtn.classList.toggle('hidden', stepIndex === 0);
+nextBtn.classList.toggle('hidden', stepIndex === dashboardTourSteps.length - 1);
+finishBtn.classList.toggle('hidden', stepIndex !== dashboardTourSteps.length - 1);
+
+if (!targetEl) {
+    tooltip.style.top = '50%';
+    tooltip.style.left = '50%';
+    tooltip.style.transform = 'translate(-50%, -50%)';
+    tooltip.classList.remove('hidden');
+    return;
+}
+
+// Mantém tooltip oculto até posicionar (evita flash na posição antiga)
+tooltip.classList.add('hidden');
+targetEl.scrollIntoView({
+    behavior: 'instant',
+    block: 'center'
+});
+
+setTimeout(function () {
+
+    var rect = targetEl.getBoundingClientRect();
+
+    var tooltipRect = tooltip.getBoundingClientRect();
+    var tooltipHeight = tooltipRect.height;
+    var tooltipWidth = tooltipRect.width;
+
+    var top = rect.bottom + 16;
+    var left = rect.left + rect.width / 2 - tooltipWidth / 2;
+
+    if (top + tooltipHeight > window.innerHeight) {
+        top = rect.top - tooltipHeight - 16;
+    }
+
+    if (left < 16) {
+        left = 16;
+    }
+
+    if (left + tooltipWidth > window.innerWidth - 16) {
+        left = window.innerWidth - tooltipWidth - 16;
+    }
+
+    // Tooltip é position:fixed — usar coordenadas da viewport (sem scroll)
+    tooltip.style.top = top + 'px';
+    tooltip.style.left = left + 'px';
+    tooltip.style.transform = '';
+    tooltip.classList.remove('hidden');
+
+}, 50);
+
+}
+
+function closeDashboardTour() {
+    var tour = document.getElementById('dashboardTour');
+    var tooltip = document.getElementById('dashboardTourTooltip');
+    if (tour) tour.classList.add('hidden');
+    if (tooltip) tooltip.classList.add('hidden');
+    localStorage.setItem('leozera_dashboard_tour_seen', 'true');
+}
+
+function startDashboardTour() {
+    dashboardTourStep = 0;
+    var tour = document.getElementById('dashboardTour');
+    if (!tour) return;
+    tour.classList.remove('hidden');
+    positionDashboardTourTooltip(0);
+}
+
+var tourBackBtn = document.getElementById('dashboardTourBack');
+var tourNextBtn = document.getElementById('dashboardTourNext');
+var tourFinishBtn = document.getElementById('dashboardTourFinish');
+if (tourBackBtn) {
+    tourBackBtn.addEventListener('click', function() {
+        if (dashboardTourStep > 0) {
+            dashboardTourStep--;
+            positionDashboardTourTooltip(dashboardTourStep);
+        }
+    });
+}
+if (tourNextBtn) {
+    tourNextBtn.addEventListener('click', function() {
+        if (dashboardTourStep < dashboardTourSteps.length - 1) {
+            dashboardTourStep++;
+            positionDashboardTourTooltip(dashboardTourStep);
+        }
+    });
+}
+if (tourFinishBtn) {
+    tourFinishBtn.addEventListener('click', function() {
+        closeDashboardTour();
+    });
+}
+
 // Carrega dados iniciais
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async function() {
+    updateOnboardingChecklist();
     initFilterSelects();
     updateFilterVisibility();
     updateDashboardSubGreeting();
-    reloadDashboard();
+    await reloadDashboard();
+
+    if (localStorage.getItem('leozera_onboarding_completed') === 'true' && !localStorage.getItem('leozera_dashboard_tour_seen')) {
+        setTimeout(startDashboardTour, 400);
+    }
 });
 </script>
 {% endblock %}

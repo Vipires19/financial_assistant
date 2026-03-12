@@ -1,5 +1,21 @@
 # Notas de versão – Leozera
 
+## v0.4.1 – Onboarding e Tour do Dashboard
+
+**Versão:** v0.4.1  
+**Tipo:** Feature / UX Improvement
+
+### Descrição
+
+* Novo sistema de onboarding completo para novos usuários
+* Tour guiado do dashboard implementado
+* Checklist inteligente de configuração inicial
+* Melhorias na experiência de primeira utilização
+* Correção de bugs no posicionamento do tooltip do tour
+* Correção da inicialização do tour após carregamento do dashboard
+
+---
+
 ## v0.6.0 – Dashboard Inteligente
 
 ### Novas funcionalidades
