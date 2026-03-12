@@ -281,6 +281,22 @@
         .agenda-nav { justify-content: center; }
         .agenda-view-group { justify-content: center; }
     }
+    @media (max-width: 768px) {
+        .fc-toolbar {
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .fc-toolbar-title {
+            font-size: 0.95rem;
+        }
+        .fc-event {
+            font-size: 11px;
+        }
+        #agenda-calendar {
+            padding: 0.5rem;
+        }
+    }
 
     /* Modal — moderno, paleta agenda + dark */
     .agenda-modal-overlay {

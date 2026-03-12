@@ -9,7 +9,7 @@
 {% block content %}
 <div class="dashboard-finance-content min-h-screen">
     <!-- Main Content -->
-    <div class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-8">
         <!-- Saldo Total e Contas -->
         <div class="dashboard-section bg-white rounded-2xl shadow-lg p-8">
             <p class="text-sm text-gray-500">Saldo Total</p>
@@ -84,7 +84,7 @@
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">
                     Resumo do Período
                 </h3>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                     <!-- Card: Despesas Totais -->
                     <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
                         <div class="flex items-center justify-between">
@@ -362,14 +362,14 @@
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">
                     Evolução do Saldo no Período
                 </h3>
-                <div class="h-72">
+                <div class="h-72 chart-wrapper">
                     <canvas id="balanceEvolutionChart"></canvas>
                 </div>
             </div>
             <!-- Gráfico: Despesas e Entradas por Categoria -->
             <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Despesas e Entradas por Categoria</h3>
-                <div class="h-64">
+                <div class="h-64 chart-wrapper">
                     <canvas id="categoryChart"></canvas>
                 </div>
             </div>
@@ -378,7 +378,7 @@
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">
                     Distribuição de Despesas
                 </h3>
-                <div class="h-64">
+                <div class="h-64 chart-wrapper">
                     <canvas id="expensesDistributionChart"></canvas>
                 </div>
             </div>
@@ -387,7 +387,7 @@
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">
                     Despesas por Conta
                 </h3>
-                <div class="h-64">
+                <div class="h-64 chart-wrapper">
                     <canvas id="expensesByAccountChart"></canvas>
                 </div>
             </div>
@@ -396,7 +396,7 @@
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">
                     Receita vs Despesa
                 </h3>
-                <div class="relative h-64">
+                <div class="relative h-64 chart-wrapper">
                     <canvas id="incomeVsExpenseChart"></canvas>
                     <div id="incomeVsExpenseCenterText"
                          class="absolute inset-0 flex items-center justify-center text-center pointer-events-none">
@@ -407,7 +407,7 @@
             <!-- Gráfico: Gastos por Dia da Semana -->
             <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Gastos por Dia da Semana</h3>
-                <div class="h-64">
+                <div class="h-64 chart-wrapper">
                     <canvas id="weekdayChart"></canvas>
                 </div>
             </div>
@@ -415,7 +415,7 @@
             <!-- Gráfico: Gastos por Horário -->
             <div class="card-dashboard bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:col-span-2">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Gastos por Horário do Dia</h3>
-                <div class="h-64">
+                <div class="h-64 chart-wrapper">
                     <canvas id="hourChart"></canvas>
                 </div>
             </div>

@@ -284,6 +284,7 @@
             box-shadow: var(--shadow);
             border: 1px solid var(--border-color);
             transition: all 0.2s ease;
+            will-change: transform;
         }
         .card-dashboard:hover {
             transform: translateY(-2px);
@@ -353,7 +354,11 @@
         /* Texto secundário utilitário */
         .text-muted { color: var(--text-secondary); }
         @media (max-width: 991.98px) {
-            .sidebar { transform: translateX(-100%); }
+            .sidebar {
+                transform: translateX(-100%);
+                width: 85%;
+                max-width: 300px;
+            }
             .sidebar.show { transform: translateX(0); }
             .main-content { margin-left: 0; }
             .sidebar-overlay {
@@ -366,6 +371,12 @@
         .btn-dashboard:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 12px var(--neon-glow); }
         .topbar .btn-light { transition: all 0.3s ease; }
         .topbar .btn-light:hover { transform: scale(1.02); }
+        .btn-sidebar-toggle {
+            font-size: 1.4rem;
+        }
+        body.dark-mode .btn-sidebar-toggle {
+            color: #f1f5f9 !important;
+        }
         .dark-mode-toggle {
             width: 2.25rem; height: 2.25rem;
             border-radius: 0.5rem;
@@ -405,6 +416,50 @@
         .dashboard-section {
             margin-bottom: 28px;
         }
+        .chart-container {
+            height: 260px;
+        }
+        .chart-wrapper {
+            position: relative;
+            height: 260px;
+        }
+        @media (max-width: 768px) {
+            .dashboard-section {
+                margin-bottom: 1rem;
+            }
+            .chart-container {
+                height: 200px;
+            }
+            .chart-wrapper {
+                height: 200px;
+            }
+            .dashboard-finance-content table {
+                font-size: 0.8rem;
+            }
+            h2 {
+                font-size: 1.25rem;
+            }
+            h3 {
+                font-size: 1rem;
+            }
+            .content-area {
+                padding: 1rem;
+            }
+            .card-dashboard {
+                padding: 1rem;
+                border-radius: 10px;
+            }
+            .dashboard-finance-content #saldoTotal {
+                font-size: 28px;
+            }
+            .dashboard-section.grid {
+                grid-template-columns: 1fr !important;
+                gap: 1rem;
+            }
+        }
+        button {
+            min-height: 42px;
+        }
 
         /* DARK MODE GLOBAL OVERRIDES */
         body.dark-mode .bg-white {
@@ -439,6 +494,12 @@
             background-color: #020617 !important;
             color: #f1f5f9 !important;
             border-color: #334155 !important;
+        }
+        @media (max-width: 768px) {
+            .modal-content {
+                max-height: 90vh;
+                overflow-y: auto;
+            }
         }
     </style>
     {% block extra_head %}{% endblock %}
@@ -527,7 +588,7 @@
         <div class="main-content">
             <!-- Topbar -->
             <header class="topbar d-flex align-items-center justify-content-between">
-                <button class="btn btn-link text-dark d-lg-none p-0 me-2" type="button" onclick="toggleSidebar()" aria-label="Menu">
+                <button class="btn btn-link text-dark d-lg-none p-0 me-2 btn-sidebar-toggle" type="button" onclick="toggleSidebar()" aria-label="Menu">
                     <i class="bi bi-list fs-4"></i>
                 </button>
                 <div class="d-none d-lg-block"></div>
