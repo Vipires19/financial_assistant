@@ -164,6 +164,7 @@ python -m venv venv
 venv\Scripts\activate
 # Linux/Mac
 source venv/bin/activate
+```
 pip install -r requirements.txt
 Environment Variables
 
@@ -198,7 +199,7 @@ cd agent_ia
 
 celery -A celery_app.celery worker --loglevel=info
 celery -A celery_app.celery beat --loglevel=info
-```
+
 ---
 
 ###🔄 Versioning
