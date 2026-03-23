@@ -202,9 +202,9 @@ celery -A celery_app.celery beat --loglevel=info
 
 ---
 
-###🔄 Versioning
+## 🔄 Versioning
 
-###Current version: v0.4.1
+### Current version: v0.4.1
 
 Highlights
 Full onboarding system with guided tour
@@ -216,7 +216,7 @@ AI-powered transaction interpretation
 
 ---
 
-##🔐 Security
+## 🔐 Security
 Authentication via Django sessions
 Email verification with token
 Password reset flow
@@ -226,7 +226,7 @@ Controlled access based on subscription status
 
 --- 
 
-##🌎 Deployment
+## 🌎 Deployment
 
 Example: PythonAnywhere
 
@@ -237,14 +237,14 @@ Then reload the application via the dashboard.
 
 ---
 
-##⚠️ Notes
+## ⚠️ Notes
 Designed to augment financial awareness, not replace financial advisors
 No direct bank integration (manual account tracking)
 AI decisions are assistive, not authoritative
 
 ---
 
-##📈 Business Vision
+## 📈 Business Vision
 
 Leozera aims to:
 
@@ -255,12 +255,12 @@ Deliver actionable insights through AI
 
 ---
 
-##👨‍💻 Author
+## 👨‍💻 Author
 
 Developed by Vinícius de Pires
 
 ---
 
-##📄 License
+## 📄 License
 
 Proprietary software. Usage and distribution are restricted.
