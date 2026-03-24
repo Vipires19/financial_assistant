@@ -65,7 +65,7 @@
         .badge-hero { background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 9999px; padding: 6px 14px; font-size: 13px; color: #94a3b8; }
         /* FAQ accordion */
         .faq-item { border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; margin-bottom: 12px; overflow: hidden; background: #1E293B; }
-        .faq-item summary { list-style: none; padding: 20px 24px; cursor: pointer; font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap-4; }
+        .faq-item summary { list-style: none; padding: 20px 24px; cursor: pointer; font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
         .faq-item summary::-webkit-details-marker { display: none; }
         .faq-item summary .faq-chevron { flex-shrink: 0; transition: transform 0.2s; color: #00F7D3; }
         .faq-item[open] summary .faq-chevron { transform: rotate(180deg); }
@@ -91,6 +91,7 @@
             <span class="text-xl font-bold gradient-text">Leozera</span>
             <div class="flex items-center gap-4">
                 <a href="#como-funciona" class="text-sm text-gray-300 hover:text-white transition">Como funciona</a>
+                <a href="#depoimentos" class="text-sm text-gray-300 hover:text-white transition">Resultados</a>
                 <a href="#planos" class="text-sm text-gray-300 hover:text-white transition">Planos</a>
                 <a href="{% url 'core:login' %}" class="text-sm text-gray-300 hover:text-white transition">Entrar</a>
                 <a href="{% url 'core:register' %}" class="btn-cta px-4 py-2 text-sm font-semibold text-[#020617]">Começar grátis</a>
@@ -114,14 +115,20 @@
                 <div class="text-center lg:text-left">
     
                     <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight headline-glow">
-                        Organize sua vida financeira direto no 
+                        Pare de chegar no fim do mês sem saber para onde seu dinheiro foi
                         <span class="gradient-text">WhatsApp</span>
                     </h1>
     
                     <p class="mt-6 text-lg text-gray-400 max-w-xl">
-                        O Leozera usa inteligência artificial para registrar seus gastos,
-                        gerar relatórios e mostrar exatamente para onde seu dinheiro está indo.
+                        O Leozera transforma mensagens simples no WhatsApp em controle financeiro real,
+                        com IA registrando seus gastos, organizando tudo e mostrando onde cortar desperdícios.
                     </p>
+
+                    <ul class="mt-6 space-y-3 text-left max-w-xl mx-auto lg:mx-0">
+                        <li class="flex items-start gap-2 text-gray-200"><span class="text-[#00F7D3] mt-0.5">✔</span>Registre gastos em segundos, sem planilhas.</li>
+                        <li class="flex items-start gap-2 text-gray-200"><span class="text-[#00F7D3] mt-0.5">✔</span>Descubra exatamente onde seu dinheiro está vazando.</li>
+                        <li class="flex items-start gap-2 text-gray-200"><span class="text-[#00F7D3] mt-0.5">✔</span>Tome decisões inteligentes com relatórios automáticos.</li>
+                    </ul>
     
                     <div class="mt-8 flex flex-wrap gap-4 justify-center lg:justify-start">
     
@@ -141,6 +148,26 @@
                         <span class="badge-hero">7 dias grátis</span>
                         <span class="badge-hero">Sem cartão</span>
                         <span class="badge-hero">Setup em 1 minuto</span>
+                    </div>
+
+                    <div class="mt-8">
+                        <div class="aspect-video w-full max-w-xl mx-auto rounded-xl overflow-hidden border border-white/10 bg-black">
+                            <iframe
+                                id="vslHero"
+                                src=""
+                                data-src="https://www.youtube.com/embed/mJttgr_LIRg?autoplay=1&mute=1&rel=0&modestbranding=1"
+                                class="w-full h-full"
+                                frameborder="0"
+                                allow="autoplay; encrypted-media; picture-in-picture"
+                                allowfullscreen>
+                            </iframe>
+                        </div>
+                        <a href="https://www.youtube.com/watch?v=mJttgr_LIRg"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="mt-4 inline-block text-sm text-ai-neon underline">
+                           Assistir no YouTube
+                        </a>
                     </div>
     
                 </div>
@@ -168,26 +195,116 @@
     </section>
 
     <!-- Como funciona -->
-    <section id="como-funciona" class="animate-on-scroll py-20 px-4 sm:px-6">
+    <section id="como-funciona" class="animate-on-scroll py-24 px-4 sm:px-6 border-t border-white/5">
         <div class="max-w-5xl mx-auto">
-            <h2 class="text-3xl sm:text-4xl font-bold text-center mb-16">Como funciona</h2>
+            <p class="text-center text-sm font-medium text-[#00F7D3] uppercase tracking-wider mb-3">Simples e imediato</p>
+            <h2 class="text-3xl sm:text-4xl font-bold text-center mb-4">Como funciona</h2>
+            <p class="text-center text-gray-400 max-w-2xl mx-auto mb-14">Em menos de 2 minutos, você começa a registrar tudo no WhatsApp e recebe clareza financeira sem esforço.</p>
             <div class="grid md:grid-cols-3 gap-8">
-                <div class="card-landing text-center">
+                <div class="card-landing text-center border border-white/10 shadow-[0_0_40px_rgba(37,99,235,0.12)]">
                     <span class="text-4xl mb-4 block">1️⃣</span>
                     <h3 class="text-xl font-semibold mb-2">Envie uma mensagem</h3>
                     <p class="text-gray-400 text-sm italic">"Gastei 45 reais no mercado"</p>
+                    <p class="text-xs text-[#00F7D3] mt-3">Sem app novo, sem curva de aprendizado.</p>
                 </div>
-                <div class="card-landing text-center">
+                <div class="card-landing text-center border border-white/10 shadow-[0_0_40px_rgba(0,247,211,0.12)]">
                     <span class="text-4xl mb-4 block">2️⃣</span>
                     <h3 class="text-xl font-semibold mb-2">A IA registra</h3>
                     <p class="text-gray-400">A transação é categorizada automaticamente.</p>
+                    <p class="text-xs text-[#00F7D3] mt-3">Menos tempo anotando, mais tempo decidindo.</p>
                 </div>
-                <div class="card-landing text-center">
+                <div class="card-landing text-center border border-white/10 shadow-[0_0_40px_rgba(37,99,235,0.12)]">
                     <span class="text-4xl mb-4 block">3️⃣</span>
                     <h3 class="text-xl font-semibold mb-2">Veja no dashboard</h3>
                     <p class="text-gray-400">Gráficos e relatórios inteligentes.</p>
+                    <p class="text-xs text-[#00F7D3] mt-3">Você enxerga padrões e corta excessos.</p>
                 </div>
             </div>
+            <div class="mt-10 text-center">
+                <a href="{% url 'core:register' %}" class="btn-cta inline-block px-8 py-4 text-base font-semibold text-[#020617] glow-neon">Quero começar agora</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Agenda inteligente -->
+    <section class="animate-on-scroll py-24 px-4 sm:px-6 border-t border-white/5">
+        <div class="max-w-6xl mx-auto">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+                <div>
+                    <p class="text-sm font-medium text-[#00F7D3] uppercase tracking-wider mb-3">Agenda Inteligente</p>
+                    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight headline-glow">
+                        Organize sua rotina e pare de esquecer o que realmente importa
+                    </h2>
+                    <p class="mt-6 text-lg text-gray-400 max-w-xl">
+                        Com a agenda do Leozera, voce centraliza compromissos e lembretes em um fluxo simples no WhatsApp, mantendo sua vida financeira e pessoal sob controle.
+                    </p>
+
+                    <ul class="mt-8 space-y-4 max-w-xl">
+                        <li class="flex items-start gap-3 text-gray-200">
+                            <span class="w-6 h-6 rounded-full bg-[#00F7D3]/15 text-[#00F7D3] flex items-center justify-center text-sm font-bold">✓</span>
+                            <span>Lembretes automaticos para contas e compromissos importantes.</span>
+                        </li>
+                        <li class="flex items-start gap-3 text-gray-200">
+                            <span class="w-6 h-6 rounded-full bg-[#00F7D3]/15 text-[#00F7D3] flex items-center justify-center text-sm font-bold">✓</span>
+                            <span>Mais clareza para planejar semana e mes sem sobrecarga mental.</span>
+                        </li>
+                        <li class="flex items-start gap-3 text-gray-200">
+                            <span class="w-6 h-6 rounded-full bg-[#00F7D3]/15 text-[#00F7D3] flex items-center justify-center text-sm font-bold">✓</span>
+                            <span>Tudo integrado ao seu dia a dia, sem app novo e sem complexidade.</span>
+                        </li>
+                    </ul>
+
+                    <a href="{% url 'core:register' %}" class="btn-cta inline-block mt-10 px-8 py-4 text-base font-semibold text-[#020617] glow-neon">
+                        Quero organizar minha rotina agora
+                    </a>
+                </div>
+
+                <div class="card-landing p-3 sm:p-4 rounded-2xl border border-white/10 shadow-[0_20px_80px_rgba(0,0,0,0.5)] text-center">
+                    <div class="aspect-video w-full max-w-xl mx-auto rounded-xl overflow-hidden border border-white/10 bg-black">
+                        <iframe
+                            id="vslAgenda"
+                            src=""
+                            data-src="https://www.youtube.com/embed/DiOxF9-8ZNk?mute=1&rel=0&modestbranding=1"
+                            class="lazy-video w-full h-full"
+                            frameborder="0"
+                            allow="encrypted-media; picture-in-picture"
+                            allowfullscreen>
+                        </iframe>
+                    </div>
+                    <a href="https://www.youtube.com/watch?v=DiOxF9-8ZNk"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="mt-4 inline-block text-sm text-ai-neon underline">
+                       Assistir no YouTube
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Segunda VSL -->
+    <section class="animate-on-scroll py-24 px-4 sm:px-6 border-t border-white/5">
+        <div class="max-w-5xl mx-auto text-center">
+            <h2 class="text-3xl sm:text-4xl font-bold mb-4">Veja como funciona na prática</h2>
+            <p class="text-gray-400 max-w-2xl mx-auto mb-10">Assista ao fluxo completo: mensagem no WhatsApp, IA organizando e dashboard mostrando onde economizar.</p>
+            <div class="aspect-video w-full max-w-xl mx-auto rounded-xl overflow-hidden border border-white/10 bg-black shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
+                <iframe
+                    id="vslFeatures"
+                    src=""
+                    data-src="https://www.youtube.com/embed/XQRalLf1r24?mute=1&rel=0&modestbranding=1"
+                    class="lazy-video w-full h-full"
+                    frameborder="0"
+                    allow="encrypted-media; picture-in-picture"
+                    allowfullscreen>
+                </iframe>
+            </div>
+            <a href="https://www.youtube.com/watch?v=XQRalLf1r24"
+               target="_blank"
+               rel="noopener noreferrer"
+               class="mt-4 inline-block text-sm text-ai-neon underline">
+               Assistir no YouTube
+            </a>
+            <a href="{% url 'core:register' %}" class="btn-cta inline-block mt-10 px-8 py-4 text-base font-semibold text-[#020617]">Testar grátis hoje</a>
         </div>
     </section>
 
@@ -304,12 +421,92 @@
         </div>
     </section>
 
-    <!-- Prova social -->
-    <section class="animate-on-scroll py-20 px-4 sm:px-6 border-t border-white/5">
+    <!-- Depoimentos -->
+    <section id="depoimentos" class="animate-on-scroll py-24 px-4 sm:px-6 border-t border-white/5">
+        <div class="max-w-6xl mx-auto">
+            <p class="text-center text-sm font-medium text-[#00F7D3] uppercase tracking-wider mb-3">Prova social</p>
+            <h2 class="text-3xl sm:text-4xl font-bold text-center mb-14">Quem usa o Leozera sente a diferença na primeira semana</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="card-landing border border-white/10">
+                    <p class="text-lg text-white mb-4">"Finalmente sei pra onde meu dinheiro vai."</p>
+                    <p class="text-sm text-[#00F7D3] font-semibold">Mariana, Designer</p>
+                    <p class="text-xs text-gray-400 mt-1">Saiu do caos das anotações soltas.</p>
+                </div>
+                <div class="card-landing border border-white/10">
+                    <p class="text-lg text-white mb-4">"Usei 1 semana e já mudou minha visão financeira."</p>
+                    <p class="text-sm text-[#00F7D3] font-semibold">Lucas, Vendedor</p>
+                    <p class="text-xs text-gray-400 mt-1">Começou a cortar gastos sem sofrimento.</p>
+                </div>
+                <div class="card-landing border border-white/10">
+                    <p class="text-lg text-white mb-4">"Antes eu chutava números. Agora eu decido com clareza."</p>
+                    <p class="text-sm text-[#00F7D3] font-semibold">Renata, Autônoma</p>
+                    <p class="text-xs text-gray-400 mt-1">Passou a enxergar padrões de consumo.</p>
+                </div>
+                <div class="card-landing border border-white/10">
+                    <p class="text-lg text-white mb-4">"Não precisei aprender nada novo, só falar no WhatsApp."</p>
+                    <p class="text-sm text-[#00F7D3] font-semibold">Eduardo, Analista</p>
+                    <p class="text-xs text-gray-400 mt-1">Aderiu no mesmo dia sem dificuldade.</p>
+                </div>
+                <div class="card-landing border border-white/10">
+                    <p class="text-lg text-white mb-4">"Hoje eu sei onde economizar sem me privar de tudo."</p>
+                    <p class="text-sm text-[#00F7D3] font-semibold">Juliana, Professora</p>
+                    <p class="text-xs text-gray-400 mt-1">Ganhou previsibilidade no fim do mês.</p>
+                </div>
+                <div class="card-landing border border-white/10">
+                    <p class="text-lg text-white mb-4">"Virou meu copiloto financeiro no dia a dia."</p>
+                    <p class="text-sm text-[#00F7D3] font-semibold">Rafael, Empreendedor</p>
+                    <p class="text-xs text-gray-400 mt-1">Menos ansiedade e mais controle prático.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Antes x Depois -->
+    <section class="animate-on-scroll py-24 px-4 sm:px-6 border-t border-white/5">
         <div class="max-w-5xl mx-auto">
+            <h2 class="text-3xl sm:text-4xl font-bold text-center mb-14">Antes vs Depois do Leozera</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card-landing border border-red-400/20">
+                    <p class="text-sm uppercase tracking-wider text-red-300 mb-4">Antes</p>
+                    <ul class="space-y-3 text-gray-300">
+                        <li>❌ Não sabe onde gasta</li>
+                        <li>❌ Vive no limite do mês</li>
+                        <li>❌ Planilhas que nunca usa</li>
+                    </ul>
+                </div>
+                <div class="card-landing border border-[#00F7D3]/30 glow-neon">
+                    <p class="text-sm uppercase tracking-wider text-[#00F7D3] mb-4">Depois com Leozera</p>
+                    <ul class="space-y-3 text-gray-100">
+                        <li>✅ Controle total no WhatsApp</li>
+                        <li>✅ Clareza financeira diária</li>
+                        <li>✅ Decisões inteligentes com IA</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Autoridade -->
+    <section class="animate-on-scroll py-24 px-4 sm:px-6 border-t border-white/5">
+        <div class="max-w-5xl mx-auto">
+            <p class="text-center text-sm font-medium text-[#00F7D3] uppercase tracking-wider mb-3">Autoridade</p>
             <h2 class="text-3xl sm:text-4xl font-bold text-center mb-16">
-                Feito para quem quer controle financeiro real
+                Criado para quem quer sair do descontrole financeiro
             </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12">
+                <div class="card-landing text-center border border-white/10">
+                    <p class="text-3xl font-bold text-[#00F7D3]">+2.500</p>
+                    <p class="text-sm text-gray-400 mt-2">usuários em fase de crescimento</p>
+                </div>
+                <div class="card-landing text-center border border-white/10">
+                    <p class="text-3xl font-bold text-[#00F7D3]">24h</p>
+                    <p class="text-sm text-gray-400 mt-2">de suporte no seu WhatsApp</p>
+                </div>
+                <div class="card-landing text-center border border-white/10">
+                    <p class="text-3xl font-bold text-[#00F7D3]">1 min</p>
+                    <p class="text-sm text-gray-400 mt-2">para começar sem instalação</p>
+                </div>
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
                 <div class="card-landing text-center md:text-left flex flex-col items-center md:items-start">
                     <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#2563EB]/20 to-[#00F7D3]/20 flex items-center justify-center mb-4 text-[#00F7D3]">
@@ -339,8 +536,34 @@
                     <p class="text-gray-400 text-sm">Anote gastos e receitas na conversa; a IA organiza por você.</p>
                 </div>
             </div>
-            <div class="pt-12 border-t border-white/10 min-h-[120px] flex items-center justify-center">
-                <!-- LOGOS DE CLIENTES -->
+            <div class="pt-12 border-t border-white/10 text-center">
+                <p class="text-gray-300">Menos complexidade, mais praticidade para o seu dinheiro render decisões melhores.</p>
+                <a href="{% url 'core:register' %}" class="btn-cta inline-block mt-8 px-8 py-4 text-base font-semibold text-[#020617]">Experimentar sem risco</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Quebra de objeções -->
+    <section class="animate-on-scroll py-24 px-4 sm:px-6 border-t border-white/5">
+        <div class="max-w-5xl mx-auto">
+            <h2 class="text-3xl sm:text-4xl font-bold text-center mb-14">Sem complicação: Principais dúvidas</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card-landing border border-white/10">
+                    <h3 class="text-lg font-semibold mb-2">Preciso instalar algo?</h3>
+                    <p class="text-gray-400">Não. Você usa o Leozera direto no WhatsApp, no celular que ja tem.</p>
+                </div>
+                <div class="card-landing border border-white/10">
+                    <h3 class="text-lg font-semibold mb-2">Funciona mesmo no WhatsApp?</h3>
+                    <p class="text-gray-400">Sim. Basta enviar a mensagem do gasto e a IA organiza automaticamente.</p>
+                </div>
+                <div class="card-landing border border-white/10">
+                    <h3 class="text-lg font-semibold mb-2">E complicado usar?</h3>
+                    <p class="text-gray-400">Nao. Foi desenhado para quem quer praticidade, sem aprender ferramenta nova.</p>
+                </div>
+                <div class="card-landing border border-white/10">
+                    <h3 class="text-lg font-semibold mb-2">Preciso saber de finanças?</h3>
+                    <p class="text-gray-400">Nao precisa. O Leozera traduz seus dados em sugestões simples e acionaveis.</p>
+                </div>
             </div>
         </div>
     </section>
@@ -417,6 +640,20 @@
                 </details>
                 <details class="faq-item">
                     <summary>
+                        Funciona mesmo no WhatsApp?
+                        <svg class="faq-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                    </summary>
+                    <div class="faq-answer"><div class="faq-answer-inner">Sim. O fluxo principal e feito por mensagens, com IA registrando e categorizando em segundos.</div></div>
+                </details>
+                <details class="faq-item">
+                    <summary>
+                        E complicado para quem nao entende de finanças?
+                        <svg class="faq-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                    </summary>
+                    <div class="faq-answer"><div class="faq-answer-inner">Nao. A proposta e justamente simplificar sua rotina para qualquer pessoa ter clareza financeira.</div></div>
+                </details>
+                <details class="faq-item">
+                    <summary>
                         Posso cancelar quando quiser?
                         <svg class="faq-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                     </summary>
@@ -430,14 +667,15 @@
     <section class="animate-on-scroll cta-final-section py-24 px-4 sm:px-6 border-t border-white/5">
         <div class="max-w-3xl mx-auto text-center">
             <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-[#F8FAFC]">
-                Pare de perder o controle do seu dinheiro.
+                Ou voce continua no escuro... ou comeca a ter controle hoje.
             </h2>
             <p class="mt-6 text-lg text-gray-300">
-                Comece agora gratuitamente e deixe a IA organizar suas finanças.
+                Seu dinheiro ja esta sendo gasto todos os dias. A diferenca e: agora voce pode decidir com clareza, e nao no impulso.
             </p>
             <a href="{% url 'core:register' %}" class="btn-cta cta-final-btn inline-block mt-10 px-14 py-5 text-xl font-semibold text-[#020617] rounded-xl">
-                Começar teste grátis
+                Quero meu controle financeiro agora
             </a>
+            <p class="text-sm text-gray-300 mt-4">7 dias gratis, sem cartao e sem instalacao.</p>
         </div>
     </section>
 
@@ -463,6 +701,36 @@
         }, { rootMargin: '0px 0px -60px 0px', threshold: 0.1 });
         els.forEach(function(el) { io.observe(el); });
     })();
+    </script>
+    <script>
+    document.addEventListener("DOMContentLoaded", function () {
+        /* Hero usa apenas o script de load + setTimeout; demais VSLs: lazy-video */
+        const videos = document.querySelectorAll("iframe.lazy-video[data-src]");
+
+        const observer = new IntersectionObserver((entries, obs) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const iframe = entry.target;
+                    iframe.src = iframe.dataset.src;
+                    obs.unobserve(iframe);
+                }
+            });
+        }, { threshold: 0.25 });
+
+        videos.forEach(video => {
+            observer.observe(video);
+        });
+    });
+    </script>
+    <script>
+    window.addEventListener("load", () => {
+        const hero = document.getElementById("vslHero");
+        if (hero && hero.dataset.src) {
+            setTimeout(() => {
+                hero.src = hero.dataset.src;
+            }, 500);
+        }
+    });
     </script>
 </body>
 </html>
