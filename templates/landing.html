@@ -151,23 +151,15 @@
                     </div>
 
                     <div class="mt-8">
-                        <div class="aspect-video w-full max-w-xl mx-auto rounded-xl overflow-hidden border border-white/10 bg-black">
-                            <iframe
-                                id="vslHero"
-                                src=""
-                                data-src="https://www.youtube.com/embed/mJttgr_LIRg?autoplay=1&mute=1&rel=0&modestbranding=1"
-                                class="w-full h-full"
-                                frameborder="0"
-                                allow="autoplay; encrypted-media; picture-in-picture"
-                                allowfullscreen>
-                            </iframe>
-                        </div>
-                        <a href="https://www.youtube.com/watch?v=mJttgr_LIRg"
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           class="mt-4 inline-block text-sm text-ai-neon underline">
-                           Assistir no YouTube
-                        </a>
+                        <video
+                            class="w-full max-w-xl mx-auto rounded-xl border border-white/10"
+                            controls
+                            preload="metadata"
+                            playsinline
+                        >
+                            <source src="{% static 'videos/VSL_LANDING_HERO.mp4' %}" type="video/mp4">
+                            Seu navegador não suporta vídeo.
+                        </video>
                     </div>
     
                 </div>
@@ -260,23 +252,14 @@
                 </div>
 
                 <div class="card-landing p-3 sm:p-4 rounded-2xl border border-white/10 shadow-[0_20px_80px_rgba(0,0,0,0.5)] text-center">
-                    <div class="aspect-video w-full max-w-xl mx-auto rounded-xl overflow-hidden border border-white/10 bg-black">
-                        <iframe
-                            id="vslAgenda"
-                            src=""
-                            data-src="https://www.youtube.com/embed/DiOxF9-8ZNk?mute=1&rel=0&modestbranding=1"
-                            class="lazy-video w-full h-full"
-                            frameborder="0"
-                            allow="encrypted-media; picture-in-picture"
-                            allowfullscreen>
-                        </iframe>
-                    </div>
-                    <a href="https://www.youtube.com/watch?v=DiOxF9-8ZNk"
-                       target="_blank"
-                       rel="noopener noreferrer"
-                       class="mt-4 inline-block text-sm text-ai-neon underline">
-                       Assistir no YouTube
-                    </a>
+                    <video
+                        class="w-full max-w-xl mx-auto rounded-xl border border-white/10"
+                        controls
+                        preload="metadata"
+                        playsinline
+                    >
+                        <source src="{% static 'videos/VSL_LANDING_AGENDA_EDIT.mp4' %}" type="video/mp4">
+                    </video>
                 </div>
             </div>
         </div>
@@ -287,23 +270,14 @@
         <div class="max-w-5xl mx-auto text-center">
             <h2 class="text-3xl sm:text-4xl font-bold mb-4">Veja como funciona na prática</h2>
             <p class="text-gray-400 max-w-2xl mx-auto mb-10">Assista ao fluxo completo: mensagem no WhatsApp, IA organizando e dashboard mostrando onde economizar.</p>
-            <div class="aspect-video w-full max-w-xl mx-auto rounded-xl overflow-hidden border border-white/10 bg-black shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
-                <iframe
-                    id="vslFeatures"
-                    src=""
-                    data-src="https://www.youtube.com/embed/XQRalLf1r24?mute=1&rel=0&modestbranding=1"
-                    class="lazy-video w-full h-full"
-                    frameborder="0"
-                    allow="encrypted-media; picture-in-picture"
-                    allowfullscreen>
-                </iframe>
-            </div>
-            <a href="https://www.youtube.com/watch?v=XQRalLf1r24"
-               target="_blank"
-               rel="noopener noreferrer"
-               class="mt-4 inline-block text-sm text-ai-neon underline">
-               Assistir no YouTube
-            </a>
+            <video
+                class="w-full max-w-xl mx-auto rounded-xl border border-white/10 shadow-[0_20px_80px_rgba(0,0,0,0.5)]"
+                controls
+                preload="metadata"
+                playsinline
+            >
+                <source src="{% static 'videos/VSL_LANDING_FEATURES_EDIT.mp4' %}" type="video/mp4">
+            </video>
             <a href="{% url 'core:register' %}" class="btn-cta inline-block mt-10 px-8 py-4 text-base font-semibold text-[#020617]">Testar grátis hoje</a>
         </div>
     </section>
@@ -701,36 +675,6 @@
         }, { rootMargin: '0px 0px -60px 0px', threshold: 0.1 });
         els.forEach(function(el) { io.observe(el); });
     })();
-    </script>
-    <script>
-    document.addEventListener("DOMContentLoaded", function () {
-        /* Hero usa apenas o script de load + setTimeout; demais VSLs: lazy-video */
-        const videos = document.querySelectorAll("iframe.lazy-video[data-src]");
-
-        const observer = new IntersectionObserver((entries, obs) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const iframe = entry.target;
-                    iframe.src = iframe.dataset.src;
-                    obs.unobserve(iframe);
-                }
-            });
-        }, { threshold: 0.25 });
-
-        videos.forEach(video => {
-            observer.observe(video);
-        });
-    });
-    </script>
-    <script>
-    window.addEventListener("load", () => {
-        const hero = document.getElementById("vslHero");
-        if (hero && hero.dataset.src) {
-            setTimeout(() => {
-                hero.src = hero.dataset.src;
-            }, 500);
-        }
-    });
     </script>
 </body>
 </html>
