@@ -20,31 +20,31 @@ The system combines **AI + messaging + analytics** to create a frictionless fina
 
 ---
 
-## 🚀 Novidades da versão 0.5.0
+## 🚀 What’s new in v0.5.0
 
-- Dashboard completamente reformulado com fluxo guiado (nível SaaS)
-- Separação de insights financeiros:
-  - análise global (comportamento)
-  - análise por período (situação atual)
-- IA aprimorada com:
-  - headline principal
-  - insights_chave (mais diretos e úteis)
-- Nova funcionalidade: **Despesas Fixas**
-  - cadastro de contas recorrentes
-  - lembretes automáticos via WhatsApp
-- Melhorias de UX:
-  - microinterações
-  - responsividade mobile/desktop
-  - destaque visual de insights (alertas e positivos)
+- Fully redesigned dashboard with a guided, SaaS-style flow
+- Split financial insights:
+  - global analysis (behavior)
+  - period analysis (current state)
+- Improved AI output:
+  - main headline
+  - `insights_chave` (more direct and actionable)
+- New feature: **Fixed expenses**
+  - recurring bills and subscriptions
+  - automatic reminders via WhatsApp
+- UX improvements:
+  - micro-interactions
+  - mobile and desktop responsiveness
+  - clearer visual emphasis for insights (alerts and positives)
 
 ---
 
-## 🧠 Diferenciais do sistema
+## 🧠 Product differentiators
 
-- **Assistente financeiro inteligente** — vai além de um dashboard tradicional, com conversação e automações
-- **Análise comportamental** do usuário com IA (padrões de gastos e hábitos)
-- **Automação de lembretes financeiros** (agenda, despesas fixas e rotinas)
-- **Integração com WhatsApp** para registrar, consultar e ser lembrado onde você já está
+- **Intelligent financial assistant** — more than a static dashboard: conversation and automations
+- **Behavioral analysis** with AI (spending patterns and habits)
+- **Automated financial reminders** (agenda, fixed expenses, recurring routines)
+- **WhatsApp integration** to log, query, and get nudged where you already chat
 
 ---
 
@@ -238,12 +238,12 @@ celery -A celery_app.celery beat --loglevel=info
 ### Current version: v0.5.0
 
 **Highlights (v0.5.0)**  
-Dashboard reformulado (fluxo guiado), insights separados (global vs período), IA com headline e insights_chave, Despesas Fixas com lembretes no WhatsApp, UX com microinterações e melhor responsividade.
+Redesigned dashboard (guided flow), split insights (global vs period), AI with headline and `insights_chave`, fixed expenses with WhatsApp reminders, UX micro-interactions and improved responsiveness.
 
 **Previous — v0.4.1**  
-Onboarding com tour guiado, checklist de primeira configuração, sistema de contas financeiras, insights e UX do dashboard, assinaturas e billing, interpretação de transações com IA.
+Onboarding with guided tour, first-time setup checklist, financial accounts, dashboard insights and UX, subscriptions and billing, AI-powered transaction interpretation.
 
-Notas detalhadas por versão: ver `PATCH_NOTES.md`.
+See `PATCH_NOTES.md` for detailed release notes.
 
 ---
 
