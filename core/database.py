@@ -5,10 +5,14 @@ Este módulo centraliza a conexão com MongoDB para uso em todos os repositories
 Localização: core/database.py
 
 Uso:
-    from core.database import get_database
+    from core.database import get_database, get_family_groups_collection
     
     db = get_database()
     collection = db['minha_collection']
+    
+    client = get_client()
+    family_groups = get_family_groups_collection(client)
+    invites = get_family_invites_collection(client)
 """
 from pymongo import MongoClient
 from django.conf import settings
@@ -72,6 +76,21 @@ def get_database():
         _database = client[settings.MONGODB_SETTINGS['DB_NAME']]
     
     return _database
+
+
+def get_family_groups_collection(client: MongoClient):
+    """
+    Retorna a collection ``family_groups`` (modo família — uso em fases futuras).
+
+    Usa o mesmo nome de banco que ``get_database()`` (``MONGODB_SETTINGS['DB_NAME']``).
+    Documentos antigos sem esta coleção permanecem válidos (MongoDB é schemaless).
+    """
+    return client[settings.MONGODB_SETTINGS["DB_NAME"]].family_groups
+
+
+def get_family_invites_collection(client: MongoClient):
+    """Retorna a collection ``family_invites`` (convites modo família)."""
+    return client[settings.MONGODB_SETTINGS["DB_NAME"]].family_invites
 
 
 def close_connection():

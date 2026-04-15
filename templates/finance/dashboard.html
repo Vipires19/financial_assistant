@@ -19,6 +19,53 @@
                 <p id="dashboardSubGreeting" class="text-sm opacity-90 mt-1">
                     Aqui está o resumo financeiro até agora.
                 </p>
+                {% if plano_recursos == 'familia' %}
+                <p class="text-sm mt-4 py-2 px-3 rounded-lg bg-white/20 border border-white/35 inline-flex items-center gap-2" role="status">
+                    <span class="opacity-90">Plano atual:</span>
+                    <strong class="font-semibold tracking-tight">Família</strong>
+                </p>
+                {% endif %}
+            </div>
+
+            {% if cancelamento_familia_agendado and plano_recursos == 'familia' and data_fim_acesso_familia_fmt %}
+            <div class="dashboard-section rounded-xl border border-amber-300/80 bg-amber-50 dark:bg-amber-950/35 dark:border-amber-500/30 p-4 shadow-sm mb-4" role="alert">
+                <div class="flex flex-wrap items-start gap-3">
+                    <span class="text-xl shrink-0" aria-hidden="true">⚠️</span>
+                    <div class="min-w-0 flex-1 text-sm text-amber-950 dark:text-amber-50">
+                        <p class="font-semibold">Seu plano família será encerrado em {{ data_fim_acesso_familia_fmt }}</p>
+                        <p class="mt-1 opacity-95">Você mantém acesso completo até essa data. Faça upgrade de novo para não perder convites e criação de família.</p>
+                        <a href="{% url 'core:planos' %}" class="inline-flex mt-3 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold">Ver planos</a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if plano_recursos == 'individual' %}
+            <div class="dashboard-section rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-slate-900/50 dark:border-amber-500/25 p-4 shadow-sm" role="region" aria-label="Upgrade plano família">
+                <div class="flex flex-wrap items-start gap-3">
+                    <span class="text-2xl shrink-0" aria-hidden="true">💡</span>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-semibold text-amber-950 dark:text-amber-100">Quer organizar as finanças com sua família?</p>
+                        <p class="text-sm text-amber-900/90 dark:text-amber-200/90 mt-1">Compartilhe contas, gastos e tenha uma visão completa.</p>
+                        <a href="{% url 'core:planos' %}?upgrade_cta=dashboard_banner#familia" class="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold shadow transition-colors">
+                            🚀 Conhecer plano família
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div id="familyModeBanner" class="dashboard-section hidden" role="status" aria-live="polite">
+                <div class="rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-slate-900/60 dark:border-emerald-500/30 p-4 shadow-sm">
+                    <div class="flex flex-wrap items-start gap-3">
+                        <span class="text-2xl shrink-0" aria-hidden="true">👨‍👩‍👧</span>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-semibold text-emerald-900 dark:text-emerald-100">👨‍👩‍👧 Você está gerenciando as finanças da sua família</p>
+                            <p id="familyModeBannerLine" class="text-sm text-emerald-800/90 dark:text-emerald-200/90 mt-0.5"></p>
+                            <p id="familyModeNames" class="text-xs text-emerald-700/80 dark:text-emerald-300/80 mt-1"></p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="dashboard-section bg-white rounded-2xl shadow-lg p-8">
@@ -435,12 +482,13 @@
                                 <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
                                 <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
                                 <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
+                                <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quem</th>
                                 <th class="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
                             </tr>
                         </thead>
                         <tbody id="transactionsTableBody" class="bg-white divide-y divide-gray-200">
                             <tr>
-                                <td colspan="7" class="px-6 py-4 text-center text-gray-500">
+                                <td colspan="8" class="px-6 py-4 text-center text-gray-500">
                                     Carregando...
                                 </td>
                             </tr>
@@ -733,11 +781,39 @@ function updateFilterVisibility() {
     }
 }
 
+function updateFamilyModeBanner(fc) {
+    var wrap = document.getElementById('familyModeBanner');
+    var line = document.getElementById('familyModeBannerLine');
+    var namesEl = document.getElementById('familyModeNames');
+    if (!wrap || !line || !namesEl) return;
+    if (!fc || !fc.active) {
+        wrap.classList.add('hidden');
+        return;
+    }
+    wrap.classList.remove('hidden');
+    var n = fc.member_count || 1;
+    var base = 'Dados da sua família (' + n + (n === 1 ? ' pessoa' : ' pessoas') + ').';
+    if (fc.family_read_only) {
+        base = 'Plano individual — visão compartilhada (somente leitura). ' + base;
+    }
+    line.textContent = base;
+    var summary = (fc.names_summary || '').trim();
+    if (summary) {
+        namesEl.textContent = summary;
+        namesEl.classList.remove('hidden');
+    } else {
+        namesEl.textContent = '';
+        namesEl.classList.add('hidden');
+    }
+}
+
 // Função para carregar dados do dashboard
 async function loadDashboardData() {
     try {
         const response = await fetch(`${API_BASE}/dashboard/?${buildDashboardParams()}`);
         const data = await response.json();
+
+        updateFamilyModeBanner(data.family_context || null);
 
         // Atualiza cards
         document.getElementById('totalExpenses').textContent = formatCurrency(data.total_expenses || 0);
@@ -1506,7 +1582,7 @@ function updateTransactionsTable(data) {
     if (transactions.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="px-6 py-4 text-center text-gray-500">
+                <td colspan="8" class="px-6 py-4 text-center text-gray-500">
                     Nenhuma transação encontrada
                 </td>
             </tr>
@@ -1541,6 +1617,9 @@ function updateTransactionsTable(data) {
         
         // Formata ID (mostra apenas primeiros caracteres)
         const idStr = trans.id ? (trans.id.length > 8 ? trans.id.substring(0, 8) + '...' : trans.id) : '-';
+
+        const ownerName = trans.owner_name || '—';
+        const whoLabel = trans.is_mine ? (ownerName + ' (Você)') : ownerName;
         
         return `
             <tr class="hover:bg-gray-50">
@@ -1553,7 +1632,12 @@ function updateTransactionsTable(data) {
                         ${typeLabel}
                     </span>
                 </td>
-                <td class="px-6 py-4 text-sm text-gray-900">${trans.description || '-'}</td>
+                <td class="px-6 py-4 text-sm text-gray-900">
+                    <span class="block">${trans.description || '-'}</span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    <span class="inline-flex items-center gap-1"><span aria-hidden="true">👤</span> ${whoLabel}</span>
+                </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-right ${typeClass}">
                     ${sign}${formatCurrency(trans.value || 0)}
                 </td>
@@ -1869,7 +1953,7 @@ function setDashboardSkeleton(active) {
     var tb = document.getElementById('transactionsTableBody');
     if (tb && active) {
         tb.innerHTML =
-            '<tr><td colspan="7" class="px-6 py-6">' +
+            '<tr><td colspan="8" class="px-6 py-6">' +
             '<div class="space-y-3 max-w-lg mx-auto">' +
             '<div class="skeleton h-4 rounded w-full"></div>' +
             '<div class="skeleton h-4 rounded" style="width:92%;max-width:100%"></div>' +
@@ -1880,7 +1964,7 @@ function setDashboardSkeleton(active) {
 
     if (!active && tb && tb.querySelector('.skeleton')) {
         tb.innerHTML =
-            '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">Não foi possível carregar as transações.</td></tr>';
+            '<tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">Não foi possível carregar as transações.</td></tr>';
     }
 
     var topRank = document.getElementById('topExpenseCategoriesList');

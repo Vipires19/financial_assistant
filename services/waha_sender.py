@@ -46,7 +46,7 @@ def enviar_mensagem_waha(telefone: str, mensagem: str) -> bool:
         mensagem: Texto a enviar.
 
     Returns:
-        True se envio OK (200), False caso contrário.
+        True se envio OK (HTTP 200, 201 ou 202), False caso contrário.
     """
     if not telefone or not mensagem:
         logger.warning("[WAHA] enviar_mensagem_waha: telefone ou mensagem vazios")
@@ -73,8 +73,12 @@ def enviar_mensagem_waha(telefone: str, mensagem: str) -> bool:
 
     try:
         r = requests.post(WAHA_SEND_TEXT_URL, json=payload, headers=headers, timeout=15)
-        if r.status_code == 200:
-            logger.info("[WAHA] Mensagem enviada com sucesso para %s", chat_id)
+        if r.status_code in (200, 201, 202):
+            logger.info(
+                "[WAHA] Mensagem enviada com sucesso: status=%s chat=%s",
+                r.status_code,
+                chat_id,
+            )
             return True
         if r.status_code == 401:
             logger.error("[WAHA] Erro 401 Unauthorized: WAHA_API_KEY inválida ou ausente")
@@ -85,7 +89,7 @@ def enviar_mensagem_waha(telefone: str, mensagem: str) -> bool:
         logger.error(
             "[WAHA] sendText falhou: status=%s body=%s",
             r.status_code,
-            (r.text[:300] if r.text else ""),
+            r.text if r.text else "",
         )
         return False
     except requests.exceptions.RequestException as e:

@@ -10,10 +10,13 @@ Views são os controllers da aplicação. Elas:
 
 NÃO devem conter lógica de negócio, apenas orquestração.
 """
+import json
+import logging
 import uuid
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
+from django.views.decorators.csrf import csrf_exempt
 from django.urls import reverse
 from django.http import JsonResponse
 from datetime import datetime, timezone, timedelta
@@ -24,13 +27,81 @@ from core.decorators.auth import login_required_mongo
 from core.services.audit_log_service import AuditLogService
 from core.repositories.email_token_repository import EmailTokenRepository
 from core.services.email_service import send_email_verificacao, send_email_recuperacao, send_email_novo_email
+from core.services.family_group_service import create_family_group
+from core.services.family_invite_service import create_family_invite, accept_family_invite
+from core.services.family_ui_service import build_family_api_detail, get_family_hub_context
+from core.models.user_model import UserModel
+from core.repositories.user_repository import UserRepository
+from core.services.mercadopago_service import (
+    codigo_plano_valido,
+    criar_assinatura,
+    executar_cancelamento_pelo_usuario,
+    extrair_preapproval_id_do_webhook,
+    processar_webhook_preapproval,
+)
+from core.services.plan_service import (
+    PLAN_FAMILIA,
+    PLAN_INDIVIDUAL,
+    get_plano_recursos as get_plano_recursos_svc,
+    is_family_read_only,
+    validate_tipo_plano_individual,
+)
+from bson import ObjectId
+
+
+logger = logging.getLogger(__name__)
 
 
 @require_GET
 @login_required_mongo
 def planos_view(request):
     """Página de planos do Leozera. Layout SaaS premium, preparada para integração futura com gateway."""
-    return render(request, 'core/planos.html')
+    cta = request.GET.get("upgrade_cta")
+    if cta:
+        logger.info(
+            "event=upgrade_clicked source=%s user_id=%s",
+            cta,
+            request.session.get("user_id"),
+        )
+    return render(request, "core/planos.html")
+
+
+@require_POST
+@login_required_mongo
+def escolher_plano_recursos_view(request):
+    """
+    POST /planos/recursos/ — define ``tipo_plano`` (individual | familia) e ``status_pagamento``.
+
+    Alinha billing futuro: família ativa marca pagamento como ativo (manual até o gateway).
+    Downgrade para individual exige sair da família antes.
+    """
+    if not getattr(request, "user_mongo", None):
+        return redirect("core:login")
+    raw = (request.POST.get("tipo_plano") or "").strip().lower()
+    if raw not in (PLAN_INDIVIDUAL, PLAN_FAMILIA):
+        messages.error(request, "Seleção de plano inválida.")
+        return redirect("core:planos")
+    uid = request.user_mongo["_id"]
+    repo = UserRepository()
+    user = repo.find_by_id(str(uid))
+    if raw == PLAN_INDIVIDUAL:
+        try:
+            validate_tipo_plano_individual(user)
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect(reverse("core:planos"))
+    now = datetime.utcnow()
+    payload = {
+        "tipo_plano": raw,
+        "status_pagamento": "ativo",
+        "updated_at": now,
+    }
+    repo.collection.update_one({"_id": uid}, {"$set": payload})
+    if raw == PLAN_FAMILIA:
+        request.session["post_upgrade_familia"] = True
+        return redirect(reverse("core:family_create"))
+    messages.success(request, "Plano individual ativado.")
+    return redirect(reverse("core:planos"))
 
 
 @require_POST
@@ -80,7 +151,7 @@ def iniciar_assinatura_view(request, plano):
     Rota intermediária: se não logado, redireciona para login com next=/checkout/<plano>/.
     Se logado, redireciona para /checkout/<plano>/.
     """
-    if plano not in ("mensal", "anual"):
+    if not codigo_plano_valido(plano):
         messages.error(request, "Plano inválido.")
         return redirect("core:planos")
     if not request.session.get("user_id"):
@@ -98,21 +169,31 @@ def pagina_checkout_view(request, plano):
     GET /checkout/<plano>
     Chama a lógica de assinatura (session) e redireciona para o checkout do Mercado Pago ou exibe erro.
     """
-    if plano not in ("mensal", "anual"):
+    if not codigo_plano_valido(plano):
         return render(request, "core/erro_pagamento.html", {"mensagem": "Plano inválido."})
     user_id = request.session.get("user_id")
     if not user_id:
         return redirect(reverse("core:login") + "?next=" + request.path)
-    import mercadopago_assinatura as mp_assinatura
-    mp_assinatura.MONGO_USER = urllib.parse.quote_plus(os.getenv("MONGO_USER", ""))
-    mp_assinatura.MONGO_PASS = urllib.parse.quote_plus(os.getenv("MONGO_PASS", ""))
-    mp_assinatura.MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN")
-    mp_assinatura.BACK_URL_BASE = request.build_absolute_uri("/").rstrip("/")
-    checkout_url, err = mp_assinatura.assinar_plano_for_user_id(plano, user_id)
-    if not err and checkout_url:
-        return redirect(checkout_url)
-    mensagem = (err.get("message") or err.get("error", "Erro ao iniciar assinatura.")) if err else "Erro ao iniciar assinatura."
-    return render(request, "core/erro_pagamento.html", {"mensagem": mensagem})
+    repo = UserRepository()
+    user = repo.find_by_id(str(user_id))
+    if not user:
+        return render(
+            request,
+            "core/erro_pagamento.html",
+            {"mensagem": "Usuário não encontrado."},
+        )
+    back = request.build_absolute_uri(reverse("core:pos_pagamento"))
+    try:
+        result = criar_assinatura(user, plano, back_url=back)
+    except ValueError as e:
+        return render(request, "core/erro_pagamento.html", {"mensagem": str(e)})
+    except RuntimeError as e:
+        return render(
+            request,
+            "core/erro_pagamento.html",
+            {"mensagem": str(e) or "Erro ao iniciar assinatura."},
+        )
+    return redirect(result["init_point"])
 
 
 @require_POST
@@ -128,23 +209,357 @@ def api_assinar_plano_view(request, plano):
             {"error": "Não autenticado", "message": "É necessário fazer login para assinar."},
             status=401,
         )
-    if plano not in ("mensal", "anual"):
+    if not codigo_plano_valido(plano):
         return JsonResponse(
-            {"error": "Plano inválido", "message": "Use 'mensal' ou 'anual'."},
+            {
+                "error": "Plano inválido",
+                "message": "Use mensal_individual, anual_individual, mensal_familia, anual_familia (ou mensal/anual).",
+            },
             status=400,
         )
-    import mercadopago_assinatura as mp_assinatura
-    mp_assinatura.MONGO_USER = urllib.parse.quote_plus(os.getenv("MONGO_USER", ""))
-    mp_assinatura.MONGO_PASS = urllib.parse.quote_plus(os.getenv("MONGO_PASS", ""))
-    mp_assinatura.MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN")
-    mp_assinatura.BACK_URL_BASE = request.build_absolute_uri("/").rstrip("/")
-    checkout_url, err = mp_assinatura.assinar_plano_for_user_id(plano, user_id)
-    if err:
+    repo = UserRepository()
+    user = repo.find_by_id(str(user_id))
+    if not user:
         return JsonResponse(
-            {"error": err.get("error", "Erro"), "message": err.get("message", err.get("error", "Erro"))},
-            status=err.get("status", 500),
+            {"error": "Usuário não encontrado", "message": "Usuário não encontrado"},
+            status=404,
         )
-    return JsonResponse({"checkout_url": checkout_url})
+    back = request.build_absolute_uri(reverse("core:pos_pagamento"))
+    try:
+        result = criar_assinatura(user, plano, back_url=back)
+    except ValueError as e:
+        return JsonResponse(
+            {"error": str(e), "message": str(e)},
+            status=400,
+        )
+    except RuntimeError as e:
+        return JsonResponse(
+            {"error": "Mercado Pago", "message": str(e)},
+            status=502,
+        )
+    return JsonResponse({"checkout_url": result["init_point"]})
+
+
+@require_POST
+@login_required_mongo
+def api_planos_assinar_view(request):
+    """
+    POST /api/planos/assinar/
+
+    Body JSON: {"plano": "mensal_individual"|"anual_individual"|"mensal_familia"|"anual_familia"|"mensal"|"anual"}
+    Retorna checkout_url (init_point) do Mercado Pago.
+    """
+    if not getattr(request, "user_mongo", None):
+        return JsonResponse(
+            {"error": "Não autenticado", "message": "É necessário fazer login para assinar."},
+            status=401,
+        )
+    try:
+        data = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido"}, status=400)
+    plano = (data.get("plano") or request.POST.get("plano") or "").strip().lower()
+    if not codigo_plano_valido(plano):
+        return JsonResponse(
+            {
+                "error": "Plano inválido",
+                "message": "Use mensal_individual, anual_individual, mensal_familia, anual_familia (ou mensal/anual).",
+            },
+            status=400,
+        )
+    back = request.build_absolute_uri(reverse("core:pos_pagamento"))
+    try:
+        result = criar_assinatura(request.user_mongo, plano, back_url=back)
+    except ValueError as e:
+        return JsonResponse({"error": str(e), "message": str(e)}, status=400)
+    except RuntimeError as e:
+        return JsonResponse(
+            {"error": "Mercado Pago", "message": str(e)},
+            status=502,
+        )
+    return JsonResponse({"checkout_url": result["init_point"]})
+
+
+@require_POST
+@login_required_mongo
+def api_planos_cancelar_view(request):
+    """
+    POST /api/planos/cancelar/
+
+    Cancela preapproval no Mercado Pago e agenda fim de acesso (grace).
+    Body vazio ou JSON opcional (ignorado).
+    """
+    if not getattr(request, "user_mongo", None):
+        return JsonResponse(
+            {"success": False, "message": "É necessário fazer login."},
+            status=401,
+        )
+    try:
+        result = executar_cancelamento_pelo_usuario(request.user_mongo)
+    except ValueError as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=400)
+    except RuntimeError as e:
+        return JsonResponse(
+            {"success": False, "message": str(e) or "Erro ao cancelar no Mercado Pago."},
+            status=502,
+        )
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def mercadopago_webhook_view(request):
+    """
+    POST /api/mercadopago/webhook/
+
+    Notificações MP: valida preapproval via API antes de ativar plano.
+    """
+    if request.method == "GET":
+        topic = (request.GET.get("topic") or "").lower()
+        pid = request.GET.get("id") or request.GET.get("data.id")
+        if topic == "preapproval" and pid:
+            processar_webhook_preapproval(str(pid))
+        return JsonResponse({"ok": True})
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        payload = {}
+
+    event = str(payload.get("type") or payload.get("action") or "").lower()
+    if event == "payment":
+        return JsonResponse({"ok": True, "ignored": True})
+
+    pid = extrair_preapproval_id_do_webhook(payload)
+    if not pid:
+        return JsonResponse({"ok": True, "ignored": True})
+
+    if event and "preapproval" not in event and "subscription" not in event:
+        return JsonResponse({"ok": True, "ignored": True})
+
+    processar_webhook_preapproval(pid)
+    return JsonResponse({"ok": True})
+
+
+@require_GET
+@login_required_mongo
+def pos_pagamento_view(request):
+    """GET /pos-pagamento/ — retorno após fluxo MP (ativação efetiva via webhook)."""
+    return render(request, "core/pos_pagamento.html")
+
+
+@require_POST
+@login_required_mongo
+def family_create_api_view(request):
+    """
+    POST /api/family/create/
+
+    Body JSON: {"nome": "Família Silva"}
+
+    Cria um ``family_group``, define o usuário autenticado como owner e membro.
+    """
+    if not getattr(request, "user_mongo", None):
+        return JsonResponse(
+            {"error": "Não autenticado", "message": "É necessário fazer login."},
+            status=401,
+        )
+    try:
+        data = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido"}, status=400)
+
+    nome = data.get("nome")
+    try:
+        result = create_family_group(request.user_mongo["_id"], nome)
+    except ValueError as e:
+        msg = str(e)
+        return JsonResponse({"error": msg, "message": msg}, status=400)
+
+    return JsonResponse(result, json_dumps_params={"ensure_ascii": False})
+
+
+@require_POST
+@login_required_mongo
+def family_invite_api_view(request):
+    """
+    POST /api/family/invite/
+
+    Body JSON: {"nome": "Lorena", "telefone": "16999999999"}
+    """
+    if not getattr(request, "user_mongo", None):
+        return JsonResponse(
+            {"error": "Não autenticado", "message": "É necessário fazer login."},
+            status=401,
+        )
+    try:
+        data = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido"}, status=400)
+
+    nome = data.get("nome")
+    telefone = data.get("telefone")
+    signup_base = request.build_absolute_uri("/").rstrip("/")
+    try:
+        result = create_family_invite(
+            request.user_mongo["_id"],
+            nome,
+            telefone,
+            signup_base_url=signup_base,
+        )
+    except ValueError as e:
+        msg = str(e)
+        return JsonResponse({"error": msg, "message": msg}, status=400)
+
+    return JsonResponse(result, json_dumps_params={"ensure_ascii": False})
+
+
+@require_POST
+@login_required_mongo
+def family_accept_api_view(request):
+    """
+    POST /api/family/accept/
+
+    Body JSON: {"token": "abc123"}
+
+    Vincula o usuário autenticado à família do convite (fallback se não usou token no cadastro).
+    """
+    if not getattr(request, "user_mongo", None):
+        return JsonResponse(
+            {"error": "Não autenticado", "message": "É necessário fazer login."},
+            status=401,
+        )
+    try:
+        data = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido"}, status=400)
+
+    token = data.get("token")
+    try:
+        result = accept_family_invite(request.user_mongo["_id"], token)
+    except ValueError as e:
+        msg = str(e)
+        return JsonResponse({"error": msg, "message": msg}, status=400)
+
+    return JsonResponse(result, json_dumps_params={"ensure_ascii": False})
+
+
+@require_GET
+@login_required_mongo
+def user_session_api_view(request):
+    """
+    GET /api/user/session/
+
+    Plano de recursos (individual | familia) e campos preparados para cobrança futura.
+    """
+    if not getattr(request, "user_mongo", None):
+        return JsonResponse(
+            {"error": "Não autenticado", "message": "É necessário fazer login."},
+            status=401,
+        )
+    u = request.user_mongo
+    assinatura = u.get("assinatura") or {}
+    plano_recursos = get_plano_recursos_svc(u)
+    status_pagamento = assinatura.get("status_pagamento")
+    if status_pagamento is None:
+        status_pagamento = u.get("status_pagamento")
+    return JsonResponse(
+        {
+            "plano": plano_recursos,
+            "status_pagamento": status_pagamento,
+            "assinatura": assinatura,
+            "family_read_only": is_family_read_only(u),
+        },
+        json_dumps_params={"ensure_ascii": False},
+    )
+
+
+@require_POST
+@login_required_mongo
+def upgrade_familia_api_view(request):
+    """
+    POST /api/planos/upgrade-familia/
+
+    Simula upgrade para plano família (sem gateway). Atualiza Mongo e retorna JSON.
+    """
+    if not getattr(request, "user_mongo", None):
+        return JsonResponse(
+            {"success": False, "error": "Não autenticado", "message": "É necessário fazer login."},
+            status=401,
+        )
+    uid = request.user_mongo["_id"]
+    repo = UserRepository()
+    now = datetime.utcnow()
+    repo.collection.update_one(
+        {"_id": uid},
+        {
+            "$set": {
+                "tipo_plano": PLAN_FAMILIA,
+                "status_pagamento": "ativo",
+                "updated_at": now,
+            }
+        },
+    )
+    logger.info("event=upgrade_completed user_id=%s", uid)
+    request.session["post_upgrade_familia"] = True
+    return JsonResponse(
+        {
+            "success": True,
+            "message": "Plano família ativado com sucesso!",
+        }
+    )
+
+
+@require_GET
+@login_required_mongo
+def family_detail_api_view(request):
+    """
+    GET /api/family/
+
+    Retorna dados da família do usuário (ou has_family: false).
+    """
+    if not getattr(request, "user_mongo", None):
+        return JsonResponse(
+            {"error": "Não autenticado", "message": "É necessário fazer login."},
+            status=401,
+        )
+    return JsonResponse(
+        build_family_api_detail(request.user_mongo),
+        json_dumps_params={"ensure_ascii": False},
+    )
+
+
+@require_GET
+@login_required_mongo
+def family_hub_view(request):
+    """GET /family/ — Minha família ou empty state."""
+    ctx = get_family_hub_context(request.user_mongo)
+    return render(request, "core/family.html", ctx)
+
+
+@require_http_methods(["GET", "POST"])
+@login_required_mongo
+def family_create_view(request):
+    """GET/POST /family/criar/ — Criar família (redirect se já tiver)."""
+    if not getattr(request, "user_mongo", None):
+        return redirect("core:login")
+    if request.user_mongo.get("family_group_id"):
+        messages.info(request, "Você já está em uma família.")
+        return redirect("core:family")
+    if request.session.pop("post_upgrade_familia", False):
+        messages.success(
+            request,
+            "🎉 Agora você pode criar sua família! Convide pessoas e comece a organizar tudo em conjunto.",
+        )
+        return redirect(reverse("core:family_create"))
+    if request.method == "POST":
+        nome = (request.POST.get("nome") or "").strip()
+        try:
+            create_family_group(request.user_mongo["_id"], nome)
+            messages.success(request, "🎉 Família criada com sucesso!")
+            return redirect("core:family")
+        except ValueError as e:
+            messages.error(request, str(e))
+    return render(request, "core/family_create.html", {"user": request.user_mongo})
 
 
 @require_GET
@@ -244,10 +659,17 @@ def register_view(request):
     
     GET: Exibe formulário de registro
     POST: Processa registro
+    
+    Convite modo família: GET ``/register/?token=...`` (campo oculto no POST).
     """
     # Se já estiver logado, redireciona
     if hasattr(request, 'user_mongo') and request.user_mongo:
         return redirect('core:index')
+
+    if request.method == 'POST':
+        family_invite_token = (request.POST.get('family_invite_token') or '').strip()
+    else:
+        family_invite_token = (request.GET.get('token') or '').strip()
     
     if request.method == 'POST':
         email = request.POST.get('email', '').strip()
@@ -266,6 +688,7 @@ def register_view(request):
                 'telefone': telefone,
                 'cidade': cidade,
                 'estado': estado,
+                'family_invite_token': family_invite_token,
             })
 
         if not telefone:
@@ -275,6 +698,7 @@ def register_view(request):
                 'nome': nome,
                 'cidade': cidade,
                 'estado': estado,
+                'family_invite_token': family_invite_token,
             })
 
         if password != password_confirm:
@@ -285,6 +709,7 @@ def register_view(request):
                 'telefone': telefone,
                 'cidade': cidade,
                 'estado': estado,
+                'family_invite_token': family_invite_token,
             })
 
         if not request.POST.get('aceite_termos'):
@@ -295,6 +720,7 @@ def register_view(request):
                 'telefone': telefone,
                 'cidade': cidade,
                 'estado': estado,
+                'family_invite_token': family_invite_token,
             })
 
         auth_service = AuthService()
@@ -315,6 +741,23 @@ def register_view(request):
                 from django.http import HttpResponseServerError
                 return HttpResponseServerError('Erro interno: usuário criado sem ID')
 
+            if family_invite_token:
+                try:
+                    accept_family_invite(ObjectId(str(user['_id'])), family_invite_token)
+                except ValueError as inv_err:
+                    logger.warning(
+                        "Convite família não aplicado após cadastro: %s", inv_err
+                    )
+                    messages.warning(request, str(inv_err))
+                except Exception:
+                    logger.exception(
+                        "Erro inesperado ao aceitar convite família após cadastro"
+                    )
+                    messages.warning(
+                        request,
+                        'Não foi possível vincular o convite à família. Tente aceitar o convite novamente após confirmar o email.',
+                    )
+
             token = str(uuid.uuid4())
             token_repo = EmailTokenRepository()
             token_repo.create(
@@ -331,8 +774,18 @@ def register_view(request):
             return redirect('core:confirmar_email_info')
         except ValueError as e:
             messages.error(request, str(e))
+            return render(request, 'core/register.html', {
+                'email': email,
+                'nome': nome,
+                'telefone': telefone,
+                'cidade': cidade,
+                'estado': estado,
+                'family_invite_token': family_invite_token,
+            })
     
-    return render(request, 'core/register.html')
+    return render(request, 'core/register.html', {
+        'family_invite_token': family_invite_token,
+    })
 
 
 def logout_view(request):
@@ -747,6 +1200,53 @@ def novidades_view(request):
         'updates': updates,
         'user_mongo': getattr(request, 'user_mongo', None),
     })
+
+
+@require_GET
+@login_required_mongo
+def observabilidade_view(request):
+    from core.models.user_model import UserModel
+
+    user_mongo = getattr(request, 'user_mongo', None)
+    if not user_mongo or not UserModel.is_admin(user_mongo):
+        return redirect('core:index')
+    return render(request, 'observabilidade.html')
+
+
+@require_GET
+@login_required_mongo
+def admin_observabilidade_api(request):
+    """API JSON de observabilidade (métricas e logs). Apenas admin; para testes."""
+    from core.models.user_model import UserModel
+    from core.services.observabilidade_service import ObservabilidadeService
+
+    if not getattr(request, 'user_mongo', None):
+        return JsonResponse({"error": "unauthorized"}, status=401)
+
+    if not UserModel.is_admin(request.user_mongo):
+        return JsonResponse(
+            {
+                "error": "forbidden",
+                "message": "Acesso restrito a administradores",
+            },
+            status=403,
+        )
+
+    service = ObservabilidadeService()
+    metrics = service.get_metrics()
+    logs = service.get_recent_logs()
+    costs = service.get_costs_per_day()
+    evaluations = service.get_evaluations_summary()
+
+    return JsonResponse(
+        {
+            "metrics": metrics,
+            "logs": logs,
+            "costs": costs,
+            "evaluations": evaluations,
+        },
+        safe=False,
+    )
 
 
 @require_http_methods(["GET", "POST"])

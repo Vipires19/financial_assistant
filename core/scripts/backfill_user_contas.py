@@ -6,7 +6,11 @@ Uso no Django shell:
     >>> from core.scripts.backfill_user_contas import run
     >>> run()
 """
+import logging
+
 from core.database import get_database
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_ACCOUNTS = [
@@ -34,5 +38,5 @@ def run():
         {"contas": {"$exists": False}},
         {"$set": {"contas": DEFAULT_ACCOUNTS}},
     )
-    print(f"Migração de contas concluída. Documentos modificados: {result.modified_count}")
+    logger.info(f"Migração de contas concluída. Documentos modificados: {result.modified_count}")
     return result.modified_count

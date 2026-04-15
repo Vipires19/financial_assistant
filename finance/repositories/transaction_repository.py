@@ -19,7 +19,7 @@ Schema da collection:
   account_id: String | null (opcional, UUID da FinancialAccount)
 }
 """
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Mapping
 from core.repositories.base_repository import BaseRepository
 from datetime import datetime
 from bson import ObjectId
@@ -95,6 +95,19 @@ class TransactionRepository(BaseRepository):
             limit=limit,
             skip=skip,
             sort=('created_at', -1)  # Usa created_at conforme schema
+        )
+
+    def find_by_read_scope(
+        self, user: Mapping[str, Any], limit: int = 100, skip: int = 0
+    ) -> List[Dict[str, Any]]:
+        """Lista transações no escopo de leitura (família ou individual)."""
+        from core.services.user_scope import get_user_scope_filter
+
+        return self.find_many(
+            query=get_user_scope_filter(user),
+            limit=limit,
+            skip=skip,
+            sort=('created_at', -1),
         )
     
     def get_summary(self, user_id: str, start_date: Optional[datetime] = None,

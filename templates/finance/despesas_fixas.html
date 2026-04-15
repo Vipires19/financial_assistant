@@ -77,7 +77,10 @@
                             {% if not d.ativo %}
                             <span class="text-xs font-medium px-2 py-0.5 rounded bg-gray-200 text-gray-700">Inativa</span>
                             {% endif %}
-                            <span class="text-sm text-gray-500">{{ d.valor_display }}</span>
+                            <span class="text-sm font-medium text-gray-900">💰 {{ d.nome }} — {{ d.valor_display }}</span>
+                            {% if has_family %}
+                            <span class="text-xs text-gray-600"><span aria-hidden="true">👤</span> {% if d.is_mine %}{{ d.owner_nome }} (Você){% else %}{{ d.owner_nome }}{% endif %}</span>
+                            {% endif %}
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <div>

@@ -20,6 +20,57 @@ The system combines **AI + messaging + analytics** to create a frictionless fina
 
 ---
 
+## 🚀 Latest release highlights
+
+### 🧠 Family Mode
+
+- Family group creation flow
+- Member invites via WhatsApp
+- Invite acceptance via secure link
+- Shared family dashboard/read scope
+- Write isolation per user (each member writes only their own entries)
+
+### 💰 Plans and Monetization
+
+- Four paid plan options:
+  - Individual Monthly
+  - Individual Yearly
+  - Family Monthly
+  - Family Yearly
+- Plan-based feature gating
+- Member limits by plan
+- Upgrade flow via UI
+
+### 💳 Mercado Pago Subscription Integration
+
+- Real preapproval subscription creation
+- Webhook-driven activation (source of truth)
+- Post-payment page
+- Trial-aware behavior
+
+### 🔄 Cancellation and Downgrade
+
+- Cancellation with grace period
+- Automatic downgrade via scheduled command/cron
+- Family data is preserved after downgrade
+- Invite/create actions blocked after expiration
+
+### 📲 WhatsApp (WAHA) Integration
+
+- Invite delivery via WAHA
+- Phone normalization before send
+- Delivery fallback/error handling
+
+### 🎨 UX Improvements
+
+- Family mode indicators on dashboard
+- User identification in shared transaction views
+- Plans page redesigned with 4 options
+- Landing page updated with explicit family plan value proposition
+- Conversion-oriented copy improvements
+
+---
+
 ## 🚀 What’s new in v0.5.0
 
 - Fully redesigned dashboard with a guided, SaaS-style flow
@@ -141,6 +192,11 @@ Each report includes:
 - AI processing via OpenAI
 - Background workers (Celery + Redis)
 - Financial dashboard with analytics layer
+- Agent orchestration with LangGraph-based flows
+- Payments powered by Mercado Pago subscriptions (preapproval + webhook)
+- Typical infra split:
+  - PythonAnywhere for dashboard/web app
+  - VPS for agent + WAHA services
 
 ---
 

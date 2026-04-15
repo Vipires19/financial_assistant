@@ -1,3 +1,14 @@
+import sys
+import uuid
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+_agent_ia_dir = Path(__file__).resolve().parent
+if str(_agent_ia_dir) not in sys.path:
+    sys.path.insert(0, str(_agent_ia_dir))
+from logger import get_logger
+from tasks import avaliar_resposta_task
+
 from flask import Flask, request, jsonify
 from services.waha import Waha
 from services.agent_restaurante import AgentRestaurante, atualizar_status_pedido
@@ -7,7 +18,6 @@ import time
 import random
 from langchain_core.prompts.chat import AIMessage,HumanMessage
 from langchain_core.messages import ToolMessage
-import logging
 import datetime
 import os
 import urllib.parse
@@ -18,6 +28,8 @@ import requests
 from openai import OpenAI
 
 load_dotenv(find_dotenv())
+
+log = get_logger(__name__)
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 WAHA_API_KEY = os.getenv('WAHA_API_KEY')
@@ -34,6 +46,51 @@ coll3_restaurante = db_restaurante.pedidos
 db_financeiro = client.financeiro_db
 coll_financeiro = db_financeiro.financeiro
 coll_usuarios = db_financeiro.users
+
+
+def _extract_user_id_from_context(data: dict, payload: dict) -> str | None:
+    """user_id explícito no webhook (data/payload ou context), se existir."""
+    for obj in (data, payload):
+        if not isinstance(obj, dict):
+            continue
+        u = obj.get("user_id")
+        if u is not None and str(u).strip():
+            return str(u).strip()
+        ctx = obj.get("context")
+        if isinstance(ctx, dict):
+            u = ctx.get("user_id") or ctx.get("userId")
+            if u is not None and str(u).strip():
+                return str(u).strip()
+    return None
+
+
+def _resolve_user_id_for_webhook(data: dict, payload: dict, chat_id: str | None) -> str | None:
+    """Prioridade: contexto do webhook; senão busca por telefone no Mongo."""
+    uid = _extract_user_id_from_context(data, payload)
+    if uid is not None:
+        return uid
+    if not chat_id:
+        return None
+    try:
+        num = chat_id.split("@", 1)[0]
+        if num.isdigit():
+            u = coll_usuarios.find_one(
+                {"$or": [{"telefone": num}, {"phone": num}]},
+                {"_id": 1},
+            )
+            if u and u.get("_id") is not None:
+                return str(u["_id"])
+    except Exception:
+        pass
+    return None
+
+
+def _log_extra(trace_id: str, user_id: str | None = None, **kwargs: object) -> dict:
+    d: dict = {"trace_id": trace_id, **kwargs}
+    if user_id is not None:
+        d["user_id"] = str(user_id)
+    return d
+
 
 def formatar_mensagem_whatsapp(texto: str) -> str:
     """
@@ -137,21 +194,62 @@ model_4 = agent_4.memory_agent()
 agent_financeiro = AgentAssistente()
 model_financeiro = agent_financeiro.memory_agent()
 
-def agent_memory(agent_model, input: str, thread_id: str, date: str = None):
+def agent_memory(
+    agent_model,
+    input: str,
+    thread_id: str,
+    date: str = None,
+    latency_ms_out=None,
+    trace_id: str = None,
+    user_id: str = None,
+):
+    tid = trace_id or str(uuid.uuid4())
+    _tx = {"trace_id": tid}
+    if user_id is not None and str(user_id).strip():
+        _tx["user_id"] = str(user_id).strip()
+
+    def _publish_latency_ms(ms: float) -> None:
+        if latency_ms_out is None:
+            return
+        try:
+            latency_ms_out[0] = float(ms)
+        except Exception:
+            try:
+                latency_ms_out[0] = 0.0
+            except Exception:
+                pass
+
     try:
         if not thread_id:
             raise ValueError("thread_id é obrigatório no config.")
+
+        log.info("agent_start", extra=dict(_tx))
 
         # 1) Prepara as entradas e o config
         inputs = {"messages": [{"role": "user", "content": input}]}
         config = {"configurable": {"thread_id": thread_id}}
 
-        print(f"Entradas para o modelo: {inputs}")
-        print(">>> [DEBUG] config que será passado para invoke:", config)
+        log.info(f"Entradas para o modelo: {inputs}", extra=dict(_tx))
+        log.info(f">>> [DEBUG] config que será passado para invoke: {config}", extra=dict(_tx))
 
-        # 2) Executa o grafo
-        result = agent_model.invoke(inputs, config)
-        print(f"Resultado bruto do grafo: {result}")
+        log.info("agent_execution", extra=dict(_tx))
+
+        # 2) Executa o grafo (latência apenas do invoke)
+        t0 = time.perf_counter()
+        try:
+            result = agent_model.invoke(inputs, config)
+        except Exception:
+            try:
+                _publish_latency_ms((time.perf_counter() - t0) * 1000)
+            except Exception:
+                _publish_latency_ms(0.0)
+            raise
+        try:
+            _publish_latency_ms((time.perf_counter() - t0) * 1000)
+        except Exception:
+            _publish_latency_ms(0.0)
+
+        log.info(f"Resultado bruto do grafo: {result}", extra=dict(_tx))
 
         # 3) Extrai a lista interna
         raw = result.get("messages") if isinstance(result, dict) else result
@@ -168,10 +266,18 @@ def agent_memory(agent_model, input: str, thread_id: str, date: str = None):
 
         # 5) Retorna o conteúdo da última mensagem útil
         ultima = msgs[-1] if msgs else {"content": "⚠️ Nenhuma resposta gerada."}
-        return ultima["content"]
+        out = ultima["content"]
+        log.info(
+            "agent_response",
+            extra={**_tx, "response": out},
+        )
+        return out
 
     except Exception as e:
-        logging.error(f"Erro ao invocar o agente: {str(e)}")
+        log.error(
+            "agent_error",
+            extra={**_tx, "error": str(e)},
+        )
         raise
 
 # ---------- Assinatura recorrente Mercado Pago ----------
@@ -204,13 +310,13 @@ def atualizar_status():
     """
     try:
         data = request.json
-        print("Webhook de atualização de status:", data)
+        log.info(f"Webhook de atualização de status: {data}")
         
         # Validação dos dados obrigatórios
         required_fields = ['event', 'pedido_id', 'cliente_nome', 'cliente_telefone', 'status_anterior', 'novo_status']
         for field in required_fields:
             if field not in data:
-                print(f"❌ Campo obrigatório ausente: {field}")
+                log.error(f"❌ Campo obrigatório ausente: {field}")
                 return jsonify({"status": "error", "message": f"Campo obrigatório ausente: {field}"}), 400
         
         # Extrai dados do webhook
@@ -253,19 +359,19 @@ def atualizar_status():
         # Para digitação
         waha.stop_typing(chat_id=chat_id, session=session)
         
-        print(f"✅ Notificação de status enviada para {cliente_nome} ({chat_id})")
-        print(f"📱 Mensagem: {mensagem_formatada}")
+        log.info(f"✅ Notificação de status enviada para {cliente_nome} ({chat_id})")
+        log.info(f"📱 Mensagem: {mensagem_formatada}")
         
         return jsonify({"status": "success", "message": "Notificação enviada com sucesso"}), 200
         
     except Exception as e:
-        print(f"❌ Erro ao processar webhook de status: {str(e)}")
+        log.error(f"❌ Erro ao processar webhook de status: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/webhook/asaas/', methods=['POST'])
 def asaas_webhook():
     data = request.json
-    print("Webhook do Asaas recebido:", data)
+    log.info(f"Webhook do Asaas recebido: {data}")
 
     # Só processa pagamento confirmado
     if data.get("event") != "PAYMENT_RECEIVED":
@@ -279,7 +385,7 @@ def asaas_webhook():
     match = re.search(padrao, description)
 
     if not match:
-        print("⚠️ Formato inesperado de description:", description)
+        log.info(f"⚠️ Formato inesperado de description: {description}")
         return jsonify({"status": "error", "message": "Formato inválido de description"}), 400
 
     id_pedido = match.group(1).strip()
@@ -311,26 +417,39 @@ def asaas_webhook():
         waha.send_message(chat_id, mensagem, session)
         waha.stop_typing(chat_id=chat_id, session=session)
 
-        print(f"Mensagem enviada para {chat_id}: {mensagem}")
+        log.info(f"Mensagem enviada para {chat_id}: {mensagem}")
 
     except Exception as e:
-        print("❌ Erro ao enviar mensagem no WhatsApp:", e)
+        log.error(f"❌ Erro ao enviar mensagem no WhatsApp: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
     return jsonify({"status": "success"}), 200
  
 def process_message(agent, agent_name, session):
-    data = request.json
-    print(f'EVENTO RECEBIDO ({agent_name}): {data}')
-
-    hoje = datetime.date.today().isoformat()
-
+    data = request.json or {}
+    trace_id = str(uuid.uuid4())
     # 🔥 NOVO PADRÃO COMPATÍVEL COM TODAS AS ENGINES
     event = data.get("event")
     payload = data.get("data") or data.get("payload") or {}
+    hoje = datetime.date.today().isoformat()
+
+    _thread_id = None
+    _user_input = None
+    if payload:
+        _thread_id = payload.get("from")
+        if _thread_id and _thread_id.endswith("@lid"):
+            alt = payload.get("_data", {}).get("key", {}).get("remoteJidAlt")
+            if alt:
+                numero = alt.replace("@s.whatsapp.net", "")
+                _thread_id = numero + "@c.us"
+        _user_input = (
+            payload.get("body")
+            or payload.get("text", {}).get("body")
+            or payload.get("conversation")
+        )
 
     if not payload:
-        print("❌ Payload vazio")
+        log.error("❌ Payload vazio", extra={"trace_id": trace_id})
         return jsonify({'status': 'ignored'}), 200
 
     chat_id = payload.get("from")
@@ -357,12 +476,31 @@ def process_message(agent, agent_name, session):
     media_info = payload.get("media")
 
     if not chat_id:
-        print("❌ chat_id ausente")
+        log.error("❌ chat_id ausente", extra={"trace_id": trace_id})
         return jsonify({'status': 'ignored'}), 200
 
     # Ignorar grupos e status
     if '@g.us' in chat_id or 'status@broadcast' in chat_id:
         return jsonify({'status': 'ignored'}), 200
+
+    user_id_resolved = _resolve_user_id_for_webhook(data, payload, chat_id)
+
+    log.info(
+        f'EVENTO RECEBIDO ({agent_name}): {data}',
+        extra=_log_extra(trace_id, user_id_resolved),
+    )
+    log.info(
+        "request_received",
+        extra=_log_extra(
+            trace_id,
+            user_id_resolved,
+            thread_id=_thread_id,
+            input=_user_input,
+        ),
+    )
+
+    input_para_eval = ""
+    latency_ms_agent = 0.0
 
     # =============================
     # 📍 LOCALIZAÇÃO
@@ -378,13 +516,50 @@ def process_message(agent, agent_name, session):
                     f"Calcule a entrega para esta localização: "
                     f"latitude {lat}, longitude {lon}, endereço: {address}"
                 )
+                input_para_eval = mensagem_localizacao
 
-                resposta = agent_memory(
-                    agent_model=agent,
-                    input=mensagem_localizacao,
-                    thread_id=chat_id,
-                    date=hoje
-                )
+                _latency_ms = [0.0]
+                log.info("agent_start", extra=_log_extra(trace_id, user_id_resolved))
+                try:
+                    resposta = agent_memory(
+                        agent_model=agent,
+                        input=mensagem_localizacao,
+                        thread_id=chat_id,
+                        date=hoje,
+                        latency_ms_out=_latency_ms,
+                        trace_id=trace_id,
+                        user_id=user_id_resolved,
+                    )
+                    try:
+                        _lm = float(_latency_ms[0])
+                    except Exception:
+                        _lm = 0.0
+                    log.info(
+                        "agent_response",
+                        extra=_log_extra(
+                            trace_id,
+                            user_id_resolved,
+                            response=resposta,
+                            latency_ms=_lm,
+                        ),
+                    )
+                    latency_ms_agent = _lm
+                except Exception as e:
+                    try:
+                        _lm = float(_latency_ms[0])
+                    except Exception:
+                        _lm = 0.0
+                    latency_ms_agent = _lm
+                    log.error(
+                        "agent_error",
+                        extra=_log_extra(
+                            trace_id,
+                            user_id_resolved,
+                            error=str(e),
+                            latency_ms=_lm,
+                        ),
+                    )
+                    resposta = f"❌ Erro ao processar localização: {str(e)}"
             else:
                 resposta = "❌ Não foi possível obter a localização."
         except Exception as e:
@@ -417,17 +592,57 @@ def process_message(agent, agent_name, session):
             texto_transcrito = transcript.text.strip()
 
             if texto_transcrito:
-                resposta = agent_memory(
-                    agent_model=agent,
-                    input=texto_transcrito,
-                    thread_id=chat_id,
-                    date=hoje
-                )
+                input_para_eval = texto_transcrito
+                _latency_ms = [0.0]
+                log.info("agent_start", extra=_log_extra(trace_id, user_id_resolved))
+                try:
+                    resposta = agent_memory(
+                        agent_model=agent,
+                        input=texto_transcrito,
+                        thread_id=chat_id,
+                        date=hoje,
+                        latency_ms_out=_latency_ms,
+                        trace_id=trace_id,
+                        user_id=user_id_resolved,
+                    )
+                    try:
+                        _lm = float(_latency_ms[0])
+                    except Exception:
+                        _lm = 0.0
+                    log.info(
+                        "agent_response",
+                        extra=_log_extra(
+                            trace_id,
+                            user_id_resolved,
+                            response=resposta,
+                            latency_ms=_lm,
+                        ),
+                    )
+                    latency_ms_agent = _lm
+                except Exception as e:
+                    try:
+                        _lm = float(_latency_ms[0])
+                    except Exception:
+                        _lm = 0.0
+                    latency_ms_agent = _lm
+                    log.error(
+                        "agent_error",
+                        extra=_log_extra(
+                            trace_id,
+                            user_id_resolved,
+                            error=str(e),
+                            latency_ms=_lm,
+                        ),
+                    )
+                    resposta = "❌ Erro ao processar áudio."
             else:
                 resposta = "❌ Não consegui entender o áudio."
 
         except Exception as e:
-            print(f"Erro áudio: {e}")
+            log.error(
+                f"Erro áudio: {e}",
+                extra=_log_extra(trace_id, user_id_resolved),
+            )
             resposta = "❌ Erro ao processar áudio."
 
     # =============================
@@ -438,19 +653,69 @@ def process_message(agent, agent_name, session):
             return jsonify({'status': 'ignored'}), 200
 
         try:
+            input_para_eval = received_message or ""
+            _latency_ms = [0.0]
+            log.info("agent_start", extra=_log_extra(trace_id, user_id_resolved))
             resposta = agent_memory(
                 agent_model=agent,
                 input=received_message,
                 thread_id=chat_id,
-                date=hoje
+                date=hoje,
+                latency_ms_out=_latency_ms,
+                trace_id=trace_id,
+                user_id=user_id_resolved,
             )
+            try:
+                _lm = float(_latency_ms[0])
+            except Exception:
+                _lm = 0.0
+            log.info(
+                "agent_response",
+                extra=_log_extra(
+                    trace_id,
+                    user_id_resolved,
+                    response=resposta,
+                    latency_ms=_lm,
+                ),
+            )
+            latency_ms_agent = _lm
         except Exception as e:
+            try:
+                _lm = float(_latency_ms[0])
+            except Exception:
+                _lm = 0.0
+            latency_ms_agent = _lm
+            log.error(
+                "agent_error",
+                extra=_log_extra(
+                    trace_id,
+                    user_id_resolved,
+                    error=str(e),
+                    latency_ms=_lm,
+                ),
+            )
             return jsonify({'status': 'error', 'message': str(e)}), 500
 
     # =============================
     # 📤 ENVIO DA RESPOSTA
     # =============================
-    print(f"📤 Enviando resposta para {chat_id}: {resposta}")
+    try:
+        _eval_payload = {
+            "input_usuario": input_para_eval,
+            "resposta_agente": resposta if isinstance(resposta, str) else str(resposta),
+            "trace_id": trace_id,
+            "latency_ms": latency_ms_agent,
+        }
+        if user_id_resolved is not None:
+            _eval_payload["user_id"] = user_id_resolved
+        avaliar_resposta_task.delay(_eval_payload)
+    except Exception:
+        pass
+
+    log.info(
+        f"📤 Enviando resposta para {chat_id}: {resposta}",
+        extra=_log_extra(trace_id, user_id_resolved),
+    )
 
     waha = Waha()
     waha.start_typing(chat_id=chat_id, session=session)
@@ -461,7 +726,10 @@ def process_message(agent, agent_name, session):
     waha.send_message(chat_id, resposta_format, session)
     waha.stop_typing(chat_id=chat_id, session=session)
 
-    print(f"✅ Mensagem enviada com sucesso para {chat_id}")
+    log.info(
+        f"✅ Mensagem enviada com sucesso para {chat_id}",
+        extra=_log_extra(trace_id, user_id_resolved),
+    )
 
     return jsonify({'status': 'success'}), 200
 

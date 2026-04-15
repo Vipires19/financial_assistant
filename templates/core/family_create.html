@@ -1,0 +1,78 @@
+{% extends 'base_dashboard.html' %}
+{% block title %}Criar família{% endblock %}
+{% block content %}
+<div class="dashboard-container" style="max-width: 560px;">
+    <div class="card-dashboard card-pad mb-4">
+        {% if plano_recursos == 'familia' and acesso_familia_ativo %}
+        <h1 class="section-title mb-2">Criar sua família</h1>
+        <p class="text-muted small mb-4">Escolha um nome que todos reconheçam. Você poderá convidar quem mora com você depois.</p>
+        <form method="post" action="">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="id_nome_familia" class="form-label">Nome da família</label>
+                <input type="text" name="nome" id="id_nome_familia" class="form-control" required
+                       maxlength="120" placeholder="Ex.: Família Silva" autocomplete="organization">
+            </div>
+            <button type="submit" class="btn btn-neon px-4">Criar família</button>
+            <a href="{% url 'core:family' %}" class="btn btn-link ms-2">Cancelar</a>
+        </form>
+        {% else %}
+        <h1 class="section-title mb-3">Criar família</h1>
+        <div class="rounded-3 border p-4 mb-4" style="border-color: var(--border-color); background: rgba(0, 247, 182, 0.06);">
+            <p class="small text-uppercase text-muted mb-2 fw-semibold letter-spacing">🔒 Recurso disponível no plano família</p>
+            <p class="mb-4 text-body">Compartilhe o controle financeiro com sua família e acompanhe tudo em um só lugar.</p>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <a href="{% url 'core:planos' %}?upgrade_cta=family_create#familia" class="btn btn-neon px-4">🚀 Fazer upgrade</a>
+                <button type="button" class="btn btn-outline-primary px-4" id="btnUpgradeFamiliaApi" title="Ativa o plano família na hora (simulação, sem pagamento)">⚡ Ativar agora</button>
+            </div>
+            <p class="small text-muted mt-3 mb-0">Ou abra a página de planos para comparar e escolher.</p>
+        </div>
+        <button type="button" class="btn btn-outline-secondary" disabled style="cursor:not-allowed; opacity:0.6;"
+                title="Faça upgrade para o plano família para criar sua família.">Criar família</button>
+        <a href="{% url 'core:family' %}" class="btn btn-link ms-2">Voltar</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if not acesso_familia_ativo %}
+<script>
+(function() {
+    function csrf() {
+        return (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+    }
+    var btn = document.getElementById('btnUpgradeFamiliaApi');
+    if (!btn) return;
+    var origHtml = btn.innerHTML;
+    btn.addEventListener('click', async function() {
+        if (!window.confirm('Abrir o Mercado Pago para assinar o plano mensal e liberar o modo família?')) return;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Redirecionando...';
+        try {
+            var res = await fetch('/api/planos/assinar/', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrf()
+                },
+                body: JSON.stringify({ plano: 'mensal_familia' })
+            });
+            var data = await res.json().catch(function() { return {}; });
+            if (res.ok && data.checkout_url) {
+                window.location.href = data.checkout_url;
+                return;
+            }
+            alert((data && data.message) || (data && data.error) || 'Não foi possível iniciar a assinatura. Tente de novo.');
+        } catch (e) {
+            alert('Erro de rede. Tente de novo.');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

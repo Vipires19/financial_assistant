@@ -6,7 +6,7 @@ Localização: finance/services/report_service.py
 Este service gera relatórios textuais do período selecionado.
 Estruturado para facilitar futuras integrações com IA e geração de PDF.
 """
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Mapping
 from datetime import datetime
 from finance.services.dashboard_service import DashboardService
 from core.services.audit_log_service import AuditLogService
@@ -26,12 +26,12 @@ class ReportService:
         self.dashboard_service = DashboardService()
         self.audit_service = AuditLogService()
     
-    def generate_text_report(self, user_id: str, period: str = 'mensal') -> Dict[str, Any]:
+    def generate_text_report(self, user: Mapping[str, Any], period: str = 'mensal') -> Dict[str, Any]:
         """
         Gera relatório textual do período.
         
         Args:
-            user_id: ID do usuário
+            user: Documento do usuário MongoDB (escopo de leitura: família quando aplicável)
             period: Período ('diário', 'semanal', 'mensal')
         
         Returns:
@@ -41,8 +41,9 @@ class ReportService:
             - summary: Resumo numérico
         """
         try:
+            user_id = str(user.get('_id', ''))
             # Busca dados do dashboard
-            dashboard_data = self.dashboard_service.get_dashboard_data(user_id, period)
+            dashboard_data = self.dashboard_service.get_dashboard_data(user, period)
             
             # Gera texto do relatório
             report_text = self._build_report_text(dashboard_data, period)
@@ -87,7 +88,7 @@ class ReportService:
         except Exception as e:
             # Loga erro na geração
             self.audit_service.log_report(
-                user_id=user_id,
+                user_id=str(user.get('_id', '')),
                 report_type='text',
                 source='dashboard',
                 status='error',
@@ -194,7 +195,7 @@ class ReportService:
         
         return "\n".join(lines)
     
-    def generate_ai_report(self, user_id: str, period: str = 'mensal') -> Dict[str, Any]:
+    def generate_ai_report(self, user: Mapping[str, Any], period: str = 'mensal') -> Dict[str, Any]:
         """
         Gera relatório com análise de IA (futuro).
         
@@ -202,7 +203,7 @@ class ReportService:
         Por enquanto, retorna o relatório textual padrão.
         
         Args:
-            user_id: ID do usuário
+            user: Documento do usuário MongoDB
             period: Período
         
         Returns:
@@ -210,7 +211,7 @@ class ReportService:
         """
         # Por enquanto, retorna relatório textual
         # TODO: Integrar com IA para análise mais profunda
-        report = self.generate_text_report(user_id, period)
+        report = self.generate_text_report(user, period)
         
         # Placeholder para análise de IA
         report['ai_analysis'] = {
@@ -221,14 +222,14 @@ class ReportService:
         
         return report
     
-    def generate_pdf_report(self, user_id: str, period: str = 'mensal') -> bytes:
+    def generate_pdf_report(self, user: Mapping[str, Any], period: str = 'mensal') -> bytes:
         """
         Gera relatório em PDF (futuro).
         
         Este método será implementado quando a geração de PDF estiver pronta.
         
         Args:
-            user_id: ID do usuário
+            user: Documento do usuário MongoDB
             period: Período
         
         Returns:
@@ -240,13 +241,13 @@ class ReportService:
         # TODO: Implementar geração de PDF usando reportlab ou weasyprint
         raise NotImplementedError("Geração de PDF será implementada em breve")
     
-    def generate_report(self, user_id: str, period: str = 'mensal', 
+    def generate_report(self, user: Mapping[str, Any], period: str = 'mensal', 
                        format: str = 'text', use_ai: bool = False) -> Dict[str, Any]:
         """
         Método principal para gerar relatórios.
         
         Args:
-            user_id: ID do usuário
+            user: Documento do usuário MongoDB
             period: Período
             format: Formato ('text', 'json', 'pdf')
             use_ai: Se deve usar IA para análise
@@ -255,12 +256,12 @@ class ReportService:
             Dict ou bytes dependendo do formato
         """
         if format == 'pdf':
-            return self.generate_pdf_report(user_id, period)
+            return self.generate_pdf_report(user, period)
         
         if use_ai:
-            report = self.generate_ai_report(user_id, period)
+            report = self.generate_ai_report(user, period)
         else:
-            report = self.generate_text_report(user_id, period)
+            report = self.generate_text_report(user, period)
         
         if format == 'json':
             return report

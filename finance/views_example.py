@@ -30,7 +30,7 @@ def dashboard_api_view(request):
     # Gera dados do dashboard
     service = DashboardService()
     data = service.get_dashboard_data(
-        user_id=str(request.user_mongo['_id']),
+        user=request.user_mongo,
         period=period
     )
     
@@ -62,7 +62,7 @@ def dashboard_html_view(request):
     # Gera dados do dashboard
     service = DashboardService()
     dashboard_data = service.get_dashboard_data(
-        user_id=str(request.user_mongo['_id']),
+        user=request.user_mongo,
         period=period
     )
     

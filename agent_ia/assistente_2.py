@@ -29,7 +29,7 @@ from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from langchain_core.runnables import RunnableLambda
 import unicodedata, re, logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 try:
     from repositories.utils_datas import resolver_periodo_relativo, resolver_data_relativa
@@ -37,6 +37,17 @@ except ImportError:
     from utils_datas import resolver_periodo_relativo, resolver_data_relativa
 
 logger = logging.getLogger(__name__)
+
+
+def _tool_trace_log(trace_id: Optional[str], tool_name: str, acao: str) -> None:
+    """Log estruturado de tool; ignora falhas; omite trace_id se ausente."""
+    try:
+        extra = {"tool": tool_name, "acao": acao}
+        if trace_id:
+            extra["trace_id"] = trace_id
+        logger.info("tool_trace", extra=extra)
+    except Exception:
+        pass
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 MONGO_USER = urllib.parse.quote_plus(os.getenv('MONGO_USER'))
@@ -215,6 +226,7 @@ class State(TypedDict, total=False):
     messages: Annotated[list, add_messages]
     user_info: Dict[str, Any]
     ultima_transacao_id: str
+    trace_id: str
 
 def check_user(state: dict, config: dict) -> dict:
     """
@@ -228,7 +240,7 @@ def check_user(state: dict, config: dict) -> dict:
         # 🔒 BLOQUEIO ABSOLUTO: usuário já autenticado
         # ======================================================
         if state.get("user_info", {}).get("status") == "ativo":
-            print("[CHECK_USER] 🔒 Usuário já ativo — verificação ignorada")
+            logger.info("[CHECK_USER] 🔒 Usuário já ativo — verificação ignorada")
             return state
 
         # ======================================================
@@ -250,7 +262,7 @@ def check_user(state: dict, config: dict) -> dict:
                 "status": "precisa_email"
             }
 
-            print(f"[CHECK_USER] ⚠️ Thread ID sem telefone ({thread_id}) → precisa_email")
+            logger.info(f"[CHECK_USER] ⚠️ Thread ID sem telefone ({thread_id}) → precisa_email")
             return state
 
         # ------------------------------------------------------
@@ -269,7 +281,7 @@ def check_user(state: dict, config: dict) -> dict:
                 "status": "precisa_email"
             }
 
-            print("[CHECK_USER] ⚠️ Telefone inválido → precisa_email")
+            logger.info("[CHECK_USER] ⚠️ Telefone inválido → precisa_email")
             return state
 
         # ------------------------------------------------------
@@ -291,7 +303,7 @@ def check_user(state: dict, config: dict) -> dict:
                 "data_vencimento_plano": assinatura.get("proximo_vencimento") or assinatura.get("fim") or cliente.get("data_vencimento_plano"),
             }
 
-            print(f"[CHECK_USER] ✅ Usuário autenticado por telefone: {telefone}")
+            logger.info(f"[CHECK_USER] ✅ Usuário autenticado por telefone: {telefone}")
             return state
 
         # ------------------------------------------------------
@@ -318,11 +330,11 @@ def check_user(state: dict, config: dict) -> dict:
             "status": "precisa_cadastro"
         }
 
-        print(f"[CHECK_USER] ❌ Usuário não encontrado ({telefone}) → cadastro solicitado")
+        logger.error(f"[CHECK_USER] ❌ Usuário não encontrado ({telefone}) → cadastro solicitado")
         return state
 
     except Exception as e:
-        print(f"[CHECK_USER] ❌ Erro inesperado: {e}")
+        logger.error(f"[CHECK_USER] ❌ Erro inesperado: {e}")
 
         state["user_info"] = {
             "nome": None,
@@ -342,7 +354,7 @@ def ask_email(state: dict, config: dict = None) -> dict:
         "Informe por favor seu *email* cadastrado:"
     )
     state.setdefault("messages", []).append(AIMessage(content=mensagem))
-    print("[ASK_EMAIL] Solicitação de email enviada")
+    logger.info("[ASK_EMAIL] Solicitação de email enviada")
     return state
 
 
@@ -380,7 +392,7 @@ def check_user_by_email(state: dict, config: dict = None) -> dict:
                 "status_assinatura": assinatura.get("status") or cliente.get("status_assinatura"),
                 "data_vencimento_plano": assinatura.get("proximo_vencimento") or assinatura.get("fim") or cliente.get("data_vencimento_plano"),
             }
-            print(f"[CHECK_USER_BY_EMAIL] ✅ Usuário ativo por email: {user_msg}")
+            logger.info(f"[CHECK_USER_BY_EMAIL] ✅ Usuário ativo por email: {user_msg}")
             return state
 
         # ❌ Email não encontrado
@@ -402,11 +414,11 @@ def check_user_by_email(state: dict, config: dict = None) -> dict:
                 )
             )
         )
-        print(f"[CHECK_USER_BY_EMAIL] ❌ Email não cadastrado: {user_msg}")
+        logger.error(f"[CHECK_USER_BY_EMAIL] ❌ Email não cadastrado: {user_msg}")
         return state
 
     except Exception as e:
-        print(f"[CHECK_USER_BY_EMAIL] Erro: {e}")
+        logger.error(f"[CHECK_USER_BY_EMAIL] Erro: {e}")
         return state
 
 
@@ -470,7 +482,7 @@ def check_plano(state: dict, config: dict = None) -> dict:
             user_info["plano"] = "sem_plano"
             user_info["plano_result"] = "sem_plano"
 
-            print(f"[CHECK_PLANO] Plano expirado para user_id={user_id}")
+            logger.info(f"[CHECK_PLANO] Plano expirado para user_id={user_id}")
 
         else:
             user_info["plano_result"] = "plano_ativo"
@@ -478,7 +490,7 @@ def check_plano(state: dict, config: dict = None) -> dict:
         return state
 
     except Exception as e:
-        print(f"[CHECK_PLANO] Erro: {e}")
+        logger.error(f"[CHECK_PLANO] Erro: {e}")
         state.setdefault("user_info", {})["plano_result"] = "sem_plano"
         return state
 
@@ -961,28 +973,42 @@ Nunca seja seco ou formal demais. Tom simpático e eficiente 😄
 # ========================================
 
 @tool("consultar_material_de_apoio")
-def consultar_material_de_apoio(pergunta: str) -> str:
+def consultar_material_de_apoio(pergunta: str, state: dict = None) -> str:
     """
     Consulta o material de apoio sobre serviços da barbearia usando RAG (vector search).
     Use quando o cliente perguntar sobre serviços, preços, descrições, etc.
     """
     try:
+        _tid = state.get("trace_id") if state else None
+        _tool_trace_log(_tid, "consultar_material_de_apoio", "consulta_rag_inicio")
         vectorStore = MongoDBAtlasVectorSearch(coll_vector, embedding=embedding_model, index_name='default')
         docs = vectorStore.similarity_search(pergunta, k=3)
         if not docs:
+            _tool_trace_log(_tid, "consultar_material_de_apoio", "consulta_rag_sem_resultados")
             return "Nenhuma informação relevante encontrada sobre este assunto."
         
         resultado = "\n\n".join([doc.page_content[:400] for doc in docs])
+        _tool_trace_log(_tid, "consultar_material_de_apoio", "consulta_rag_concluida")
         return resultado
     except Exception as e:
-        print(f"[VECTOR_SEARCH] Erro: {e}")
+        logger.error(f"[VECTOR_SEARCH] Erro: {e}")
+        _tool_trace_log(
+            state.get("trace_id") if state else None,
+            "consultar_material_de_apoio",
+            f"erro: {e!s}",
+        )
         return f"Erro ao buscar informações: {str(e)}"
 
 # ========================================
 # 💰 GESTÃO DE TRANSAÇÕES FINANCEIRAS
 # ========================================
 
-def escolher_categoria_ia(descricao: str, tipo: str, categorias_usuario: dict) -> str:
+def escolher_categoria_ia(
+    descricao: str,
+    tipo: str,
+    categorias_usuario: dict,
+    trace_id: Optional[str] = None,
+) -> str:
     """
     Usa IA para escolher a melhor categoria baseada na descrição da transação.
     
@@ -995,6 +1021,7 @@ def escolher_categoria_ia(descricao: str, tipo: str, categorias_usuario: dict) -
         Nome da categoria escolhida ou "Outros" se não conseguir determinar
     """
     try:
+        _tool_trace_log(trace_id, "escolher_categoria_ia", "classificacao_categoria_inicio")
         # Filtrar categorias relevantes baseado no tipo da transação
         tipos_relevantes = []
         if tipo == "expense":
@@ -1013,7 +1040,8 @@ def escolher_categoria_ia(descricao: str, tipo: str, categorias_usuario: dict) -
         
         # Se não houver categorias, retornar "Outros"
         if not categorias_lista:
-            print(f"[ESCOLHER_CATEGORIA_IA] Nenhuma categoria encontrada para tipo {tipo}")
+            logger.info(f"[ESCOLHER_CATEGORIA_IA] Nenhuma categoria encontrada para tipo {tipo}")
+            _tool_trace_log(trace_id, "escolher_categoria_ia", "sem_categorias_disponiveis")
             return "Outros"
         
         # Formatar lista de categorias para o prompt
@@ -1063,14 +1091,17 @@ def escolher_categoria_ia(descricao: str, tipo: str, categorias_usuario: dict) -
                     break
         
         if not categoria_encontrada:
-            print(f"[ESCOLHER_CATEGORIA_IA] Categoria '{categoria_escolhida}' não encontrada na lista. Usando 'Outros'")
+            logger.info(f"[ESCOLHER_CATEGORIA_IA] Categoria '{categoria_escolhida}' não encontrada na lista. Usando 'Outros'")
+            _tool_trace_log(trace_id, "escolher_categoria_ia", "fallback_outros_categoria")
             return "Outros"
         
-        print(f"[ESCOLHER_CATEGORIA_IA] ✅ Categoria escolhida: {categoria_encontrada} (baseado em: '{descricao}')")
+        logger.info(f"[ESCOLHER_CATEGORIA_IA] ✅ Categoria escolhida: {categoria_encontrada} (baseado em: '{descricao}')")
+        _tool_trace_log(trace_id, "escolher_categoria_ia", "classificacao_categoria_concluida")
         return categoria_encontrada
         
     except Exception as e:
-        print(f"[ESCOLHER_CATEGORIA_IA] Erro ao escolher categoria: {e}")
+        logger.error(f"[ESCOLHER_CATEGORIA_IA] Erro ao escolher categoria: {e}")
+        _tool_trace_log(trace_id, "escolher_categoria_ia", f"erro: {e!s}")
         import traceback
         traceback.print_exc()
         return "Outros"
@@ -1092,7 +1123,9 @@ def cadastrar_transacao(valor: float, tipo: str, descricao: str = None, categori
         Mensagem de confirmação do cadastro
     """
     try:
-        print(f"[CADASTRAR_TRANSACAO] Iniciando cadastro: valor={valor}, tipo={tipo}, descricao={descricao}")
+        _tid = state.get("trace_id") if state else None
+        _tool_trace_log(_tid, "cadastrar_transacao", "inicio")
+        logger.info(f"[CADASTRAR_TRANSACAO] Iniciando cadastro: valor={valor}, tipo={tipo}, descricao={descricao}")
         
         # Validar tipo
         if tipo not in ['expense', 'income']:
@@ -1117,7 +1150,7 @@ def cadastrar_transacao(valor: float, tipo: str, descricao: str = None, categori
             email = user_info.get("email")
             # Tentar obter user_id diretamente do state se disponível
             user_id = user_info.get("user_id") or user_info.get("_id")
-            print(f"[CADASTRAR_TRANSACAO] Info do state: telefone={telefone}, email={email}, user_id={user_id}")
+            logger.info(f"[CADASTRAR_TRANSACAO] Info do state: telefone={telefone}, email={email}, user_id={user_id}")
         
         # Se não tiver user_id, buscar no MongoDB
         if not user_id:
@@ -1127,7 +1160,7 @@ def cadastrar_transacao(valor: float, tipo: str, descricao: str = None, categori
                     user = coll_clientes.find_one({'email': email.lower().strip()})
                     if user:
                         user_id = user.get('_id')
-                        print(f"[CADASTRAR_TRANSACAO] Usuário encontrado por email: user_id={user_id}")
+                        logger.info(f"[CADASTRAR_TRANSACAO] Usuário encontrado por email: user_id={user_id}")
                 
                 # Se não encontrou por email, tentar por telefone (se disponível)
                 if not user_id and telefone:
@@ -1139,7 +1172,7 @@ def cadastrar_transacao(valor: float, tipo: str, descricao: str = None, categori
                     })
                     if user:
                         user_id = user.get('_id')
-                        print(f"[CADASTRAR_TRANSACAO] Usuário encontrado por telefone: user_id={user_id}")
+                        logger.info(f"[CADASTRAR_TRANSACAO] Usuário encontrado por telefone: user_id={user_id}")
                 
                 if not user_id:
                     return (
@@ -1148,7 +1181,7 @@ def cadastrar_transacao(valor: float, tipo: str, descricao: str = None, categori
                     )
                 
             except Exception as e:
-                print(f"[CADASTRAR_TRANSACAO] Erro ao buscar usuário: {e}")
+                logger.error(f"[CADASTRAR_TRANSACAO] Erro ao buscar usuário: {e}")
                 return f"❌ Erro ao buscar usuário no banco de dados: {str(e)}"
         
         # Verificar se usuário tem pelo menos uma conta ativa (obrigatório para transação)
@@ -1375,7 +1408,8 @@ def cadastrar_transacao(valor: float, tipo: str, descricao: str = None, categori
                     },
                     upsert=True
                 )
-            print(f"[CADASTRAR_TRANSACAO] Transação cadastrada com sucesso: {transacao_id}")
+            logger.info(f"[CADASTRAR_TRANSACAO] Transação cadastrada com sucesso: {transacao_id}")
+            _tool_trace_log(_tid, "cadastrar_transacao", "transacao_cadastrada")
             
             # Mensagem de confirmação
             tipo_label = "gasto" if tipo == "expense" else "entrada"
@@ -1395,11 +1429,17 @@ def cadastrar_transacao(valor: float, tipo: str, descricao: str = None, categori
             return mensagem
             
         except Exception as e:
-            print(f"[CADASTRAR_TRANSACAO] Erro ao inserir transação: {e}")
+            logger.error(f"[CADASTRAR_TRANSACAO] Erro ao inserir transação: {e}")
+            _tool_trace_log(_tid, "cadastrar_transacao", f"erro_inserir: {e!s}")
             return f"❌ Erro ao salvar transação no banco de dados: {str(e)}"
             
     except Exception as e:
-        print(f"[CADASTRAR_TRANSACAO] Erro geral: {e}")
+        logger.error(f"[CADASTRAR_TRANSACAO] Erro geral: {e}")
+        _tool_trace_log(
+            state.get("trace_id") if state else None,
+            "cadastrar_transacao",
+            f"erro_geral: {e!s}",
+        )
         import traceback
         traceback.print_exc()
         return f"❌ Erro ao cadastrar transação: {str(e)}"
@@ -1472,7 +1512,7 @@ def editar_ultima_transacao(
         )
         return msg.strip()
     except Exception as e:
-        print(f"[EDITAR_ULTIMA_TRANSACAO] Erro: {e}")
+        logger.error(f"[EDITAR_ULTIMA_TRANSACAO] Erro: {e}")
         return "Não foi possível atualizar a transação. Tente novamente."
 
 
@@ -1578,7 +1618,9 @@ def gerar_relatorio(periodo: str = "último mês", tipo: str = None, state: dict
         Relatório formatado com resumo das transações
     """
     try:
-        print(f"[GERAR_RELATORIO] Gerando relatório para período: {periodo}, tipo: {tipo}")
+        _tid = state.get("trace_id") if state else None
+        _tool_trace_log(_tid, "gerar_relatorio", "inicio")
+        logger.info(f"[GERAR_RELATORIO] Gerando relatório para período: {periodo}, tipo: {tipo}")
         
         # Obter informações do usuário do state
         user_id = None
@@ -1590,7 +1632,7 @@ def gerar_relatorio(periodo: str = "último mês", tipo: str = None, state: dict
             telefone = user_info.get("telefone")
             email = user_info.get("email")
             user_id = user_info.get("user_id") or user_info.get("_id")
-            print(f"[GERAR_RELATORIO] Info do state: telefone={telefone}, email={email}, user_id={user_id}")
+            logger.info(f"[GERAR_RELATORIO] Info do state: telefone={telefone}, email={email}, user_id={user_id}")
         
         # Se não tiver user_id, buscar no MongoDB
         if not user_id:
@@ -1599,7 +1641,7 @@ def gerar_relatorio(periodo: str = "último mês", tipo: str = None, state: dict
                     user = coll_clientes.find_one({'email': email.lower().strip()})
                     if user:
                         user_id = user.get('_id')
-                        print(f"[GERAR_RELATORIO] Usuário encontrado por email: user_id={user_id}")
+                        logger.info(f"[GERAR_RELATORIO] Usuário encontrado por email: user_id={user_id}")
                 
                 if not user_id and telefone:
                     user = coll_clientes.find_one({
@@ -1610,7 +1652,7 @@ def gerar_relatorio(periodo: str = "último mês", tipo: str = None, state: dict
                     })
                     if user:
                         user_id = user.get('_id')
-                        print(f"[GERAR_RELATORIO] Usuário encontrado por telefone: user_id={user_id}")
+                        logger.info(f"[GERAR_RELATORIO] Usuário encontrado por telefone: user_id={user_id}")
                 
                 if not user_id:
                     return (
@@ -1619,7 +1661,7 @@ def gerar_relatorio(periodo: str = "último mês", tipo: str = None, state: dict
                     )
                 
             except Exception as e:
-                print(f"[GERAR_RELATORIO] Erro ao buscar usuário: {e}")
+                logger.error(f"[GERAR_RELATORIO] Erro ao buscar usuário: {e}")
                 return f"❌ Erro ao buscar usuário no banco de dados: {str(e)}"
         
         # Converter user_id para ObjectId se necessário
@@ -1628,7 +1670,7 @@ def gerar_relatorio(periodo: str = "último mês", tipo: str = None, state: dict
         # Calcular período
         start_date, end_date, periodo_label = _calcular_periodo(periodo)
         
-        print(f"[GERAR_RELATORIO] Período calculado: {start_date} até {end_date}")
+        logger.info(f"[GERAR_RELATORIO] Período calculado: {start_date} até {end_date}")
         
         # Construir query base
         query = {
@@ -1785,11 +1827,17 @@ def gerar_relatorio(periodo: str = "último mês", tipo: str = None, state: dict
         
         relatorio += f"📈 Total de transações analisadas: {len(transacoes)}\n"
         
-        print(f"[GERAR_RELATORIO] Relatório gerado com sucesso para {len(transacoes)} transações")
+        logger.info(f"[GERAR_RELATORIO] Relatório gerado com sucesso para {len(transacoes)} transações")
+        _tool_trace_log(_tid, "gerar_relatorio", "relatorio_concluido")
         return relatorio
         
     except Exception as e:
-        print(f"[GERAR_RELATORIO] Erro geral: {e}")
+        logger.error(f"[GERAR_RELATORIO] Erro geral: {e}")
+        _tool_trace_log(
+            state.get("trace_id") if state else None,
+            "gerar_relatorio",
+            f"erro: {e!s}",
+        )
         import traceback
         traceback.print_exc()
         return f"❌ Erro ao gerar relatório: {str(e)}"
@@ -1811,7 +1859,9 @@ def consultar_gasto_categoria(categoria: str, periodo: str = "último mês", sta
         Resumo do gasto total na categoria no período solicitado
     """
     try:
-        print(f"[CONSULTAR_GASTO_CATEGORIA] Consultando categoria: {categoria}, período: {periodo}")
+        _tid = state.get("trace_id") if state else None
+        _tool_trace_log(_tid, "consultar_gasto_categoria", "inicio")
+        logger.info(f"[CONSULTAR_GASTO_CATEGORIA] Consultando categoria: {categoria}, período: {periodo}")
         
         # Validar categoria
         if not categoria or categoria.strip() == "":
@@ -1829,7 +1879,7 @@ def consultar_gasto_categoria(categoria: str, periodo: str = "último mês", sta
             telefone = user_info.get("telefone")
             email = user_info.get("email")
             user_id = user_info.get("user_id") or user_info.get("_id")
-            print(f"[CONSULTAR_GASTO_CATEGORIA] Info do state: telefone={telefone}, email={email}, user_id={user_id}")
+            logger.info(f"[CONSULTAR_GASTO_CATEGORIA] Info do state: telefone={telefone}, email={email}, user_id={user_id}")
         
         # Se não tiver user_id, buscar no MongoDB
         if not user_id:
@@ -1838,7 +1888,7 @@ def consultar_gasto_categoria(categoria: str, periodo: str = "último mês", sta
                     user = coll_clientes.find_one({'email': email.lower().strip()})
                     if user:
                         user_id = user.get('_id')
-                        print(f"[CONSULTAR_GASTO_CATEGORIA] Usuário encontrado por email: user_id={user_id}")
+                        logger.info(f"[CONSULTAR_GASTO_CATEGORIA] Usuário encontrado por email: user_id={user_id}")
                 
                 if not user_id and telefone:
                     user = coll_clientes.find_one({
@@ -1849,7 +1899,7 @@ def consultar_gasto_categoria(categoria: str, periodo: str = "último mês", sta
                     })
                     if user:
                         user_id = user.get('_id')
-                        print(f"[CONSULTAR_GASTO_CATEGORIA] Usuário encontrado por telefone: user_id={user_id}")
+                        logger.info(f"[CONSULTAR_GASTO_CATEGORIA] Usuário encontrado por telefone: user_id={user_id}")
                 
                 if not user_id:
                     return (
@@ -1858,7 +1908,7 @@ def consultar_gasto_categoria(categoria: str, periodo: str = "último mês", sta
                     )
                 
             except Exception as e:
-                print(f"[CONSULTAR_GASTO_CATEGORIA] Erro ao buscar usuário: {e}")
+                logger.error(f"[CONSULTAR_GASTO_CATEGORIA] Erro ao buscar usuário: {e}")
                 return f"❌ Erro ao buscar usuário no banco de dados: {str(e)}"
         
         # Converter user_id para ObjectId se necessário
@@ -1867,7 +1917,7 @@ def consultar_gasto_categoria(categoria: str, periodo: str = "último mês", sta
         # Calcular período usando a função auxiliar
         start_date, end_date, periodo_label = _calcular_periodo(periodo)
         
-        print(f"[CONSULTAR_GASTO_CATEGORIA] Período calculado: {start_date} até {end_date}")
+        logger.info(f"[CONSULTAR_GASTO_CATEGORIA] Período calculado: {start_date} até {end_date}")
         
         # Buscar transações do tipo "expense" (gastos) na categoria especificada
         query = {
@@ -1924,11 +1974,17 @@ def consultar_gasto_categoria(categoria: str, periodo: str = "último mês", sta
                     f"({data_trans.strftime('%d/%m/%Y')})\n"
                 )
         
-        print(f"[CONSULTAR_GASTO_CATEGORIA] Consulta realizada: {num_transacoes} transações, total R$ {total_gasto:.2f}")
+        logger.info(f"[CONSULTAR_GASTO_CATEGORIA] Consulta realizada: {num_transacoes} transações, total R$ {total_gasto:.2f}")
+        _tool_trace_log(_tid, "consultar_gasto_categoria", "consulta_concluida")
         return resposta
         
     except Exception as e:
-        print(f"[CONSULTAR_GASTO_CATEGORIA] Erro geral: {e}")
+        logger.error(f"[CONSULTAR_GASTO_CATEGORIA] Erro geral: {e}")
+        _tool_trace_log(
+            state.get("trace_id") if state else None,
+            "consultar_gasto_categoria",
+            f"erro: {e!s}",
+        )
         import traceback
         traceback.print_exc()
         return f"❌ Erro ao consultar gastos para a categoria {categoria}: {str(e)}"
@@ -1962,7 +2018,7 @@ def criar_compromisso(descricao: str, data: str, hora_inicio: str, hora_fim: str
         Mensagem de confirmação do compromisso criado ou solicitação de hora_fim se não informado
     """
     try:
-        print(f"[CRIAR_COMPROMISSO] Iniciando: descricao={descricao}, data={data}, hora_inicio={hora_inicio}, hora_fim={hora_fim}")
+        logger.info(f"[CRIAR_COMPROMISSO] Iniciando: descricao={descricao}, data={data}, hora_inicio={hora_inicio}, hora_fim={hora_fim}")
         
         # Validar campos obrigatórios
         if not descricao or descricao.strip() == "":
@@ -1995,7 +2051,7 @@ def criar_compromisso(descricao: str, data: str, hora_inicio: str, hora_fim: str
             telefone = user_info.get("telefone")
             email = user_info.get("email")
             user_id = user_info.get("user_id") or user_info.get("_id")
-            print(f"[CRIAR_COMPROMISSO] Info do state: telefone={telefone}, email={email}, user_id={user_id}")
+            logger.info(f"[CRIAR_COMPROMISSO] Info do state: telefone={telefone}, email={email}, user_id={user_id}")
         
         # Se não tiver user_id, buscar no MongoDB
         if not user_id:
@@ -2004,7 +2060,7 @@ def criar_compromisso(descricao: str, data: str, hora_inicio: str, hora_fim: str
                     user = coll_clientes.find_one({'email': email.lower().strip()})
                     if user:
                         user_id = user.get('_id')
-                        print(f"[CRIAR_COMPROMISSO] Usuário encontrado por email: user_id={user_id}")
+                        logger.info(f"[CRIAR_COMPROMISSO] Usuário encontrado por email: user_id={user_id}")
                 
                 if not user_id and telefone:
                     user = coll_clientes.find_one({
@@ -2015,7 +2071,7 @@ def criar_compromisso(descricao: str, data: str, hora_inicio: str, hora_fim: str
                     })
                     if user:
                         user_id = user.get('_id')
-                        print(f"[CRIAR_COMPROMISSO] Usuário encontrado por telefone: user_id={user_id}")
+                        logger.info(f"[CRIAR_COMPROMISSO] Usuário encontrado por telefone: user_id={user_id}")
                 
                 if not user_id:
                     return (
@@ -2024,7 +2080,7 @@ def criar_compromisso(descricao: str, data: str, hora_inicio: str, hora_fim: str
                     )
                 
             except Exception as e:
-                print(f"[CRIAR_COMPROMISSO] Erro ao buscar usuário: {e}")
+                logger.error(f"[CRIAR_COMPROMISSO] Erro ao buscar usuário: {e}")
                 return f"❌ Erro ao buscar usuário no banco de dados: {str(e)}"
         
         # Converter user_id para ObjectId se necessário
@@ -2124,7 +2180,7 @@ def criar_compromisso(descricao: str, data: str, hora_inicio: str, hora_fim: str
                     f"Por favor, escolha outro horário ou cancele o compromisso existente primeiro."
                 )
         except Exception as e:
-            print(f"[CRIAR_COMPROMISSO] Erro ao verificar compromisso existente: {e}")
+            logger.error(f"[CRIAR_COMPROMISSO] Erro ao verificar compromisso existente: {e}")
             # Continuar mesmo se houver erro na verificação
         
         # Criar documento do compromisso
@@ -2150,7 +2206,7 @@ def criar_compromisso(descricao: str, data: str, hora_inicio: str, hora_fim: str
         try:
             result = coll_compromissos.insert_one(compromisso)
             compromisso_id = result.inserted_id
-            print(f"[CRIAR_COMPROMISSO] Compromisso criado com sucesso: {compromisso_id}")
+            logger.info(f"[CRIAR_COMPROMISSO] Compromisso criado com sucesso: {compromisso_id}")
             
             # Formatar data e hora para exibição
             data_formatada = data_obj.strftime('%d/%m/%Y')
@@ -2168,13 +2224,13 @@ def criar_compromisso(descricao: str, data: str, hora_inicio: str, hora_fim: str
             return mensagem
             
         except Exception as e:
-            print(f"[CRIAR_COMPROMISSO] Erro ao inserir compromisso: {e}")
+            logger.error(f"[CRIAR_COMPROMISSO] Erro ao inserir compromisso: {e}")
             import traceback
             traceback.print_exc()
             return f"❌ Erro ao salvar compromisso no banco de dados: {str(e)}"
             
     except Exception as e:
-        print(f"[CRIAR_COMPROMISSO] Erro geral: {e}")
+        logger.error(f"[CRIAR_COMPROMISSO] Erro geral: {e}")
         import traceback
         traceback.print_exc()
         return f"❌ Erro ao criar compromisso: {str(e)}"
@@ -2197,7 +2253,7 @@ def pesquisar_compromissos(periodo: str = "próximo mês", state: dict = None) -
         Lista formatada de compromissos encontrados
     """
     try:
-        print(f"[PESQUISAR_COMPROMISSOS] Iniciando pesquisa: periodo={periodo}")
+        logger.info(f"[PESQUISAR_COMPROMISSOS] Iniciando pesquisa: periodo={periodo}")
         
         # Obter informações do usuário do state
         user_id = None
@@ -2209,7 +2265,7 @@ def pesquisar_compromissos(periodo: str = "próximo mês", state: dict = None) -
             telefone = user_info.get("telefone")
             email = user_info.get("email")
             user_id = user_info.get("user_id") or user_info.get("_id")
-            print(f"[PESQUISAR_COMPROMISSOS] Info do state: telefone={telefone}, email={email}, user_id={user_id}")
+            logger.info(f"[PESQUISAR_COMPROMISSOS] Info do state: telefone={telefone}, email={email}, user_id={user_id}")
         
         # Se não tiver user_id, buscar no MongoDB
         if not user_id:
@@ -2218,7 +2274,7 @@ def pesquisar_compromissos(periodo: str = "próximo mês", state: dict = None) -
                     user = coll_clientes.find_one({'email': email.lower().strip()})
                     if user:
                         user_id = user.get('_id')
-                        print(f"[PESQUISAR_COMPROMISSOS] Usuário encontrado por email: user_id={user_id}")
+                        logger.info(f"[PESQUISAR_COMPROMISSOS] Usuário encontrado por email: user_id={user_id}")
                 
                 if not user_id and telefone:
                     user = coll_clientes.find_one({
@@ -2229,7 +2285,7 @@ def pesquisar_compromissos(periodo: str = "próximo mês", state: dict = None) -
                     })
                     if user:
                         user_id = user.get('_id')
-                        print(f"[PESQUISAR_COMPROMISSOS] Usuário encontrado por telefone: user_id={user_id}")
+                        logger.info(f"[PESQUISAR_COMPROMISSOS] Usuário encontrado por telefone: user_id={user_id}")
                 
                 if not user_id:
                     return (
@@ -2238,7 +2294,7 @@ def pesquisar_compromissos(periodo: str = "próximo mês", state: dict = None) -
                     )
                 
             except Exception as e:
-                print(f"[PESQUISAR_COMPROMISSOS] Erro ao buscar usuário: {e}")
+                logger.error(f"[PESQUISAR_COMPROMISSOS] Erro ao buscar usuário: {e}")
                 return f"❌ Erro ao buscar usuário no banco de dados: {str(e)}"
         
         # Converter user_id para ObjectId se necessário
@@ -2280,7 +2336,7 @@ def pesquisar_compromissos(periodo: str = "próximo mês", state: dict = None) -
                 end_date = hoje + timedelta(days=30)
                 periodo_label = "próximo mês"
         
-        print(f"[PESQUISAR_COMPROMISSOS] Período calculado: {start_date} até {end_date}")
+        logger.info(f"[PESQUISAR_COMPROMISSOS] Período calculado: {start_date} até {end_date}")
         
         # Buscar compromissos no período
         query = {
@@ -2353,11 +2409,11 @@ def pesquisar_compromissos(periodo: str = "próximo mês", state: dict = None) -
                     resposta += f"     📝 {descricao}\n"
                 resposta += "\n"
         
-        print(f"[PESQUISAR_COMPROMISSOS] {len(compromissos)} compromissos encontrados")
+        logger.info(f"[PESQUISAR_COMPROMISSOS] {len(compromissos)} compromissos encontrados")
         return resposta
         
     except Exception as e:
-        print(f"[PESQUISAR_COMPROMISSOS] Erro geral: {e}")
+        logger.error(f"[PESQUISAR_COMPROMISSOS] Erro geral: {e}")
         import traceback
         traceback.print_exc()
         return f"❌ Erro ao pesquisar compromissos: {str(e)}"
@@ -2383,7 +2439,7 @@ def cancelar_compromisso(data: str, hora_inicio: str, hora_fim: str = None, stat
         Mensagem de confirmação do cancelamento ou erro se não encontrado
     """
     try:
-        print(f"[CANCELAR_COMPROMISSO] Iniciando: data={data}, hora_inicio={hora_inicio}, hora_fim={hora_fim}")
+        logger.info(f"[CANCELAR_COMPROMISSO] Iniciando: data={data}, hora_inicio={hora_inicio}, hora_fim={hora_fim}")
         
         # Validar campos obrigatórios
         if not data or data.strip() == "":
@@ -2402,7 +2458,7 @@ def cancelar_compromisso(data: str, hora_inicio: str, hora_fim: str = None, stat
             telefone = user_info.get("telefone")
             email = user_info.get("email")
             user_id = user_info.get("user_id") or user_info.get("_id")
-            print(f"[CANCELAR_COMPROMISSO] Info do state: telefone={telefone}, email={email}, user_id={user_id}")
+            logger.info(f"[CANCELAR_COMPROMISSO] Info do state: telefone={telefone}, email={email}, user_id={user_id}")
         
         # Se não tiver user_id, buscar no MongoDB
         if not user_id:
@@ -2411,7 +2467,7 @@ def cancelar_compromisso(data: str, hora_inicio: str, hora_fim: str = None, stat
                     user = coll_clientes.find_one({'email': email.lower().strip()})
                     if user:
                         user_id = user.get('_id')
-                        print(f"[CANCELAR_COMPROMISSO] Usuário encontrado por email: user_id={user_id}")
+                        logger.info(f"[CANCELAR_COMPROMISSO] Usuário encontrado por email: user_id={user_id}")
                 
                 if not user_id and telefone:
                     user = coll_clientes.find_one({
@@ -2422,7 +2478,7 @@ def cancelar_compromisso(data: str, hora_inicio: str, hora_fim: str = None, stat
                     })
                     if user:
                         user_id = user.get('_id')
-                        print(f"[CANCELAR_COMPROMISSO] Usuário encontrado por telefone: user_id={user_id}")
+                        logger.info(f"[CANCELAR_COMPROMISSO] Usuário encontrado por telefone: user_id={user_id}")
                 
                 if not user_id:
                     return (
@@ -2431,7 +2487,7 @@ def cancelar_compromisso(data: str, hora_inicio: str, hora_fim: str = None, stat
                     )
                 
             except Exception as e:
-                print(f"[CANCELAR_COMPROMISSO] Erro ao buscar usuário: {e}")
+                logger.error(f"[CANCELAR_COMPROMISSO] Erro ao buscar usuário: {e}")
                 return f"❌ Erro ao buscar usuário no banco de dados: {str(e)}"
         
         # Converter user_id para ObjectId se necessário
@@ -2577,19 +2633,19 @@ def cancelar_compromisso(data: str, hora_inicio: str, hora_fim: str = None, stat
                         f"Seu compromisso para {data_formatada} às {hora_inicio_formatada} foi cancelado com sucesso! ✅"
                     )
                 
-                print(f"[CANCELAR_COMPROMISSO] Compromisso cancelado: {compromisso_id}")
+                logger.info(f"[CANCELAR_COMPROMISSO] Compromisso cancelado: {compromisso_id}")
                 return mensagem
             else:
                 return "❌ Erro: Não foi possível cancelar o compromisso. Tente novamente."
                 
         except Exception as e:
-            print(f"[CANCELAR_COMPROMISSO] Erro ao buscar/cancelar compromisso: {e}")
+            logger.error(f"[CANCELAR_COMPROMISSO] Erro ao buscar/cancelar compromisso: {e}")
             import traceback
             traceback.print_exc()
             return f"❌ Erro ao cancelar compromisso: {str(e)}"
             
     except Exception as e:
-        print(f"[CANCELAR_COMPROMISSO] Erro geral: {e}")
+        logger.error(f"[CANCELAR_COMPROMISSO] Erro geral: {e}")
         import traceback
         traceback.print_exc()
         return f"❌ Erro ao cancelar compromisso: {str(e)}"
@@ -2650,7 +2706,7 @@ def confirmar_compromisso(codigo: str, acao: str, state: dict = None) -> str:
             )
             return "❌ Compromisso cancelado com sucesso."
     except Exception as e:
-        print(f"[CONFIRMAR_COMPROMISSO] Erro: {e}")
+        logger.error(f"[CONFIRMAR_COMPROMISSO] Erro: {e}")
         return "❌ Código inválido ou já processado."
 
 
@@ -2703,7 +2759,7 @@ class AgentAssistente:
                 safe_state[key] = self._convert_datetime_to_string(value)
             return safe_state
         except Exception as e:
-            print(f"[PREPARE_SAFE_STATE] Erro: {e}")
+            logger.error(f"[PREPARE_SAFE_STATE] Erro: {e}")
             return {"user_info": state.get("user_info", {})}
 
     def _init_memory(self):
@@ -2901,6 +2957,14 @@ class AgentAssistente:
                 return state
 
             safe_state = self._prepare_safe_state(state)
+            try:
+                _tid_merge = state.get("trace_id") or (
+                    config.get("configurable") or {}
+                ).get("trace_id")
+                if _tid_merge:
+                    safe_state["trace_id"] = _tid_merge
+            except Exception:
+                pass
             tool_messages = []
             user_status = state.get("user_info", {}).get("status")
             user_plano = state.get("user_info", {}).get("plano")

@@ -13,17 +13,19 @@ Schema:
     "valor": float,
     "dia_vencimento": int,  # 1 a 31
     "ativo": bool,
-    "ultimo_envio": datetime | omitido  # opcional (ex.: lembrete ou lançamento automático)
+    "ultimo_envio": datetime | omitido,  # instante do último lembrete (Celery)
+    "ultimo_envio_mes": str | omitido,  # "YYYY-MM" — no máximo 1 lembrete/mês por despesa
 }
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Mapping
 from datetime import datetime
 
 from bson import ObjectId
 
 from core.repositories.base_repository import BaseRepository
+from core.services.user_scope import get_user_scope_filter
 
 
 class DespesaFixaRepository(BaseRepository):
@@ -57,6 +59,20 @@ class DespesaFixaRepository(BaseRepository):
         if not user_id:
             raise ValueError("user_id é obrigatório")
         query: Dict[str, Any] = {"user_id": self._normalize_user_id(user_id)}
+        if apenas_ativas:
+            query["ativo"] = True
+        return self.find_many(query=query, limit=limit, skip=skip, sort=("dia_vencimento", 1))
+
+    def find_for_read_scope(
+        self,
+        user: Mapping[str, Any],
+        *,
+        apenas_ativas: bool = True,
+        limit: int = 200,
+        skip: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """Lista despesas fixas no escopo de leitura (família ou individual)."""
+        query: Dict[str, Any] = dict(get_user_scope_filter(user))
         if apenas_ativas:
             query["ativo"] = True
         return self.find_many(query=query, limit=limit, skip=skip, sort=("dia_vencimento", 1))

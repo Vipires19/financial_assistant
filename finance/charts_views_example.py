@@ -22,7 +22,7 @@ def charts_category_view(request):
     
     service = DashboardService()
     data = service.get_expenses_by_category_chart_data(
-        user_id=str(request.user_mongo['_id']),
+        user=request.user_mongo,
         period=period
     )
     
@@ -43,7 +43,7 @@ def charts_weekday_view(request):
     
     service = DashboardService()
     data = service.get_expenses_by_weekday_chart_data(
-        user_id=str(request.user_mongo['_id']),
+        user=request.user_mongo,
         period=period
     )
     
@@ -64,7 +64,7 @@ def charts_hour_view(request):
     
     service = DashboardService()
     data = service.get_expenses_by_hour_chart_data(
-        user_id=str(request.user_mongo['_id']),
+        user=request.user_mongo,
         period=period
     )
     
@@ -85,7 +85,7 @@ def charts_all_view(request):
     
     service = DashboardService()
     data = service.get_all_charts_data(
-        user_id=str(request.user_mongo['_id']),
+        user=request.user_mongo,
         period=period
     )
     

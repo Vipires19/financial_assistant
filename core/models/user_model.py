@@ -22,6 +22,18 @@ class UserModel:
       password_hash: String,
       role: String,              // 'user', 'admin' (futuro: mais roles)
       account_id: ObjectId,      // ID da conta/organização (futuro)
+      family_group_id: ObjectId | omitido | null,  // opcional — modo família (futuro)
+      role_in_family: String | omitido | null,     // opcional — 'owner' | 'member'
+      tipo_plano: String | omitido,                // 'individual' | 'familia' (recursos; preferir este campo)
+      status_pagamento: String | omitido,          // ativo, cancelando, cancelado, pendente, ...
+      cancelamento_agendado: Boolean | omitido,     // True = cancelou no MP; acesso até data_fim_acesso
+      data_fim_acesso: ISODate | omitido | null,    // fim do período pago (grace); depois downgrade automático
+      assinatura: {                                // pagamento (trial, mensal, anual — não confundir com tipo_plano)
+        plano_key: String | omitido,               // chave canônica: mensal_individual, anual_familia, ...
+        plano: String,
+        status_pagamento: String | omitido,
+        ...
+      },
       is_active: Boolean,
       aceitou_termos: Boolean,
       data_aceite_termos: ISODate,
@@ -29,11 +41,24 @@ class UserModel:
       created_at: ISODate,
       updated_at: ISODate
     }
+
+    Campos ``family_group_id`` e ``role_in_family`` são opcionais; usuários sem eles
+    seguem o fluxo atual sem alteração.
     """
     
     # Roles disponíveis
     ROLE_USER = 'user'
     ROLE_ADMIN = 'admin'
+
+    # Modo família (opcional no documento; não confundir com ``role`` da aplicação)
+    ROLE_IN_FAMILY_OWNER = 'owner'
+    ROLE_IN_FAMILY_MEMBER = 'member'
+    VALID_ROLES_IN_FAMILY = (ROLE_IN_FAMILY_OWNER, ROLE_IN_FAMILY_MEMBER)
+
+    # Plano de recursos (monetização — individual vs família). Preferir campo ``tipo_plano`` no MongoDB.
+    PLAN_INDIVIDUAL = "individual"
+    PLAN_FAMILIA = "familia"
+    VALID_PLANOS_RECURSOS = (PLAN_INDIVIDUAL, PLAN_FAMILIA)
     
     # Roles válidas
     VALID_ROLES = [ROLE_USER, ROLE_ADMIN]
@@ -102,6 +127,17 @@ class UserModel:
         user_permissions = permissions_map.get(role, [])
         return '*' in user_permissions or permission in user_permissions
     
+    @staticmethod
+    def get_plano_recursos(user: Optional[Dict[str, Any]]) -> str:
+        """
+        Retorna o plano de recursos: individual (default) ou familia.
+
+        Delega para ``core.services.plan_service.get_plano_recursos`` (fonte única de verdade).
+        """
+        from core.services.plan_service import get_plano_recursos as _get_plano_recursos
+
+        return _get_plano_recursos(user)
+
     @staticmethod
     def is_admin(user: Dict[str, Any]) -> bool:
         """

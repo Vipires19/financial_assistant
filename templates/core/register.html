@@ -27,6 +27,9 @@
             <!-- Form -->
             <form method="POST" action="{% url 'core:register' %}" class="space-y-6">
                 {% csrf_token %}
+                {% if family_invite_token %}
+                <input type="hidden" name="family_invite_token" value="{{ family_invite_token }}">
+                {% endif %}
                 
                 <!-- Email -->
                 <div>

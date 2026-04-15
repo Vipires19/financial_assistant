@@ -7,7 +7,7 @@ Este service contém a lógica de negócio relacionada a transações.
 Ele usa o TransactionRepository para acessar dados, mas adiciona
 validações e regras de negócio.
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Mapping
 from datetime import datetime
 from finance.repositories.transaction_repository import TransactionRepository
 from core.services.audit_log_service import AuditLogService
@@ -127,6 +127,12 @@ class TransactionService:
             Lista de transações
         """
         return self.transaction_repo.find_by_user(user_id, limit, skip)
+
+    def get_user_transactions_read_scope(
+        self, user: Mapping[str, Any], limit: int = 100, skip: int = 0
+    ) -> List[Dict[str, Any]]:
+        """Lista transações no escopo de leitura (família ou individual)."""
+        return self.transaction_repo.find_by_read_scope(user, limit, skip)
     
     def get_financial_summary(self, user_id: str, 
                              start_date: Optional[datetime] = None,

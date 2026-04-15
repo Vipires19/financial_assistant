@@ -1,0 +1,100 @@
+{% extends 'base_dashboard.html' %}
+
+{% block title %}Observabilidade{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+
+<div class="dashboard-container">
+    <h2 class="section-title">Observabilidade do Agente</h2>
+
+    <!-- Cards -->
+    <div class="dashboard-section grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+        <div class="card-dashboard card-pad">
+            <p class="text-sm text-gray-500">Requests</p>
+            <p id="obs_total_requests" class="text-2xl font-bold">-</p>
+        </div>
+
+        <div class="card-dashboard card-pad">
+            <p class="text-sm text-gray-500">Latência</p>
+            <p id="obs_latency" class="text-2xl font-bold">-</p>
+        </div>
+
+        <div class="card-dashboard card-pad">
+            <p class="text-sm text-gray-500">Tokens</p>
+            <p id="obs_tokens" class="text-2xl font-bold">-</p>
+        </div>
+
+        <div class="card-dashboard card-pad">
+            <p class="text-sm text-gray-500">Qualidade IA</p>
+            <p id="obs_quality" class="text-2xl font-bold">-</p>
+        </div>
+
+    </div>
+
+    <!-- Gráfico -->
+    <div class="card-dashboard mt-4 p-4">
+        <h3 class="section-title mb-3">Uso de Tokens por Dia</h3>
+        <div class="h-64 chart-wrapper">
+            <canvas id="obs_tokens_chart"></canvas>
+        </div>
+    </div>
+
+</div>
+
+<script>
+async function loadObservabilidade() {
+    try {
+        const res = await fetch("/observabilidade/api/", { credentials: "same-origin" });
+        if (!res.ok) {
+            return;
+        }
+        const data = await res.json();
+
+        const m = data.metrics || {};
+
+        document.getElementById("obs_total_requests").textContent =
+            m.total_requests != null ? m.total_requests : "-";
+        const lat = m.avg_latency;
+        document.getElementById("obs_latency").textContent =
+            lat != null && lat !== "" ? Number(lat).toFixed(1) + " ms" : "-";
+        document.getElementById("obs_tokens").textContent =
+            m.total_tokens != null ? m.total_tokens : "-";
+        const q = m.avg_quality_score;
+        document.getElementById("obs_quality").textContent =
+            q != null && q !== "" ? Number(q).toFixed(2) : "-";
+
+        const ctx = document.getElementById("obs_tokens_chart");
+        if (ctx && typeof Chart !== "undefined") {
+            if (window._obsTokensChart) {
+                window._obsTokensChart.destroy();
+            }
+            const costs = data.costs || [];
+            window._obsTokensChart = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: costs.map(function (c) { return c.day; }),
+                    datasets: [{
+                        label: "Tokens",
+                        data: costs.map(function (c) { return c.tokens; }),
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                },
+            });
+        }
+    } catch (e) {
+        console.error("Erro ao carregar observabilidade:", e);
+    }
+}
+
+loadObservabilidade();
+</script>
+
+{% endblock %}

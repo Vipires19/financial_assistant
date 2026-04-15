@@ -10,8 +10,11 @@ Ou com Django:
     >>> from scripts.migrar_transaction_date import run_migration
     >>> run_migration()
 """
+import logging
 import os
 import sys
+
+logger = logging.getLogger(__name__)
 
 # Permite rodar como script standalone a partir da raiz do projeto financeiro
 if __name__ == "__main__":
@@ -37,8 +40,8 @@ def run_migration():
     encontradas = coll.count_documents(query)
 
     if encontradas == 0:
-        print("Transações sem transaction_date encontradas: 0")
-        print("Transações atualizadas com sucesso: 0")
+        logger.info("Transações sem transaction_date encontradas: 0")
+        logger.info("Transações atualizadas com sucesso: 0")
         return {"encontradas": 0, "atualizadas": 0}
 
     # update_many com pipeline de agregação: define transaction_date = created_at
@@ -49,8 +52,8 @@ def run_migration():
 
     atualizadas = result.modified_count
 
-    print(f"Transações sem transaction_date encontradas: {encontradas}")
-    print(f"Transações atualizadas com sucesso: {atualizadas}")
+    logger.info(f"Transações sem transaction_date encontradas: {encontradas}")
+    logger.info(f"Transações atualizadas com sucesso: {atualizadas}")
 
     return {"encontradas": encontradas, "atualizadas": atualizadas}
 

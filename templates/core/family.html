@@ -1,0 +1,175 @@
+{% extends 'base_dashboard.html' %}
+{% block title %}Minha família{% endblock %}
+{% block content %}
+<div class="dashboard-container">
+    {% if not has_family %}
+    <div class="card-dashboard card-pad text-center py-5" style="max-width: 520px; margin: 0 auto;">
+        <h1 class="h4 fw-bold mb-3">👨‍👩‍👧 Crie sua família</h1>
+        <p class="text-muted mb-4">Controle os gastos em conjunto sem perder a organização individual.</p>
+        {% if plano_recursos == 'familia' %}
+        <a href="{% url 'core:family_create' %}" class="btn btn-neon btn-lg px-4">Criar família</a>
+        {% else %}
+        <p class="small text-muted mb-3"><span aria-hidden="true">🔒</span> Disponível no plano família</p>
+        <a href="{% url 'core:planos' %}?upgrade_cta=family_hub_empty#familia" class="btn btn-neon btn-lg px-4">Ver planos</a>
+        {% endif %}
+    </div>
+    {% else %}
+    {% if family_read_only %}
+    <div class="alert alert-warning border-0 mb-4" role="status">
+        <strong>Plano individual.</strong> Você continua vendo sua família, mas não pode convidar nem usar recursos do plano família.
+        <a href="{% url 'core:planos' %}?upgrade_cta=family_readonly#familia" class="alert-link">Fazer upgrade</a>
+        ou saia da família em Configurações quando disponível.
+    </div>
+    {% endif %}
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-1">👨‍👩‍👧 {{ family_name }}</h1>
+            <p class="text-body mb-2">💡 Aqui você gerencia os membros da sua família e acompanha os gastos em conjunto, sem perder o controle individual.</p>
+            <p class="text-muted mb-0">Você está gerenciando uma família com <strong>{{ member_count }}</strong> {% if member_count == 1 %}membro{% else %}membros{% endif %}.</p>
+        </div>
+        <div class="d-flex flex-column align-items-stretch gap-2" id="convidar">
+            {% if can_invite %}
+            <button type="button" class="btn btn-neon" data-bs-toggle="modal" data-bs-target="#modalConvite">
+                ➕ Adicionar pessoa à família
+            </button>
+            {% else %}
+            <div class="alert alert-info py-2 px-3 mb-0 small" role="status">
+                Somente o responsável pela família pode convidar novos membros.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-3">
+        {% for m in members %}
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="card-dashboard card-pad h-100 border">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <span class="fs-5" aria-hidden="true">👤</span>
+                        <strong class="ms-1">{{ m.nome }}</strong>
+                        {% if m.is_you %}<span class="badge bg-secondary ms-1">Você</span>{% endif %}
+                    </div>
+                    {% if m.badge_owner %}
+                    <span class="badge rounded-pill" style="background: rgba(0,247,182,0.2); color: #0d6e58;">👑 Dono</span>
+                    {% else %}
+                    <span class="badge bg-light text-dark border">Membro</span>
+                    {% endif %}
+                </div>
+                <div class="text-muted small">
+                    <span aria-hidden="true">📱</span> {{ m.telefone_fmt }}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Modal convite -->
+    <div class="modal fade" id="modalConvite" tabindex="-1" aria-labelledby="modalConviteLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalConviteLabel">Convidar membro</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted">Enviamos o convite pelo WhatsApp com um link para a pessoa entrar na família.</p>
+                    <div class="mb-3">
+                        <label for="inviteNome" class="form-label">Nome</label>
+                        <input type="text" class="form-control" id="inviteNome" placeholder="Nome de quem vai entrar" maxlength="80">
+                    </div>
+                    <div class="mb-0">
+                        <label for="inviteFone" class="form-label">Telefone (WhatsApp)</label>
+                        <input type="tel" class="form-control" id="inviteFone" placeholder="DDD + número" inputmode="numeric">
+                        <p class="small text-muted mt-2 mb-0">O convite será enviado via WhatsApp.</p>
+                    </div>
+                    <div id="inviteFeedback" class="mt-3 small" role="status"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-neon" id="btnEnviarConvite">
+                        <span class="spinner-border spinner-border-sm d-none" id="inviteSpinner" role="status"></span>
+                        Enviar convite
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1080;">
+        <div id="familyToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="familyToastBody"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if has_family and can_invite %}
+<script>
+(function() {
+    function csrf() {
+        return (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+    }
+    var btn = document.getElementById('btnEnviarConvite');
+    var spin = document.getElementById('inviteSpinner');
+    var fb = document.getElementById('inviteFeedback');
+    var toastEl = document.getElementById('familyToast');
+    var toastBody = document.getElementById('familyToastBody');
+    if (!btn) return;
+    btn.addEventListener('click', async function() {
+        var nome = (document.getElementById('inviteNome') || {}).value || '';
+        var tel = (document.getElementById('inviteFone') || {}).value || '';
+        fb.textContent = '';
+        btn.disabled = true;
+        if (spin) spin.classList.remove('d-none');
+        try {
+            var res = await fetch('/api/family/invite/', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrf()
+                },
+                body: JSON.stringify({ nome: nome.trim(), telefone: tel.trim() })
+            });
+            var data = await res.json().catch(function() { return {}; });
+            if (res.ok) {
+                fb.innerHTML = '<span class="text-success d-block">📲 Convite enviado com sucesso!</span><span class="text-success small d-block mt-2">Assim que a pessoa entrar, os dados dela aparecerão automaticamente no seu dashboard.</span><span class="text-success small d-block mt-2">Você não precisa fazer mais nada 👍</span>';
+                if (toastBody && toastEl && window.bootstrap) {
+                    toastBody.innerHTML = '📲 Convite enviado com sucesso!<br><small class="d-block mt-1">Assim que a pessoa entrar, os dados dela aparecerão automaticamente no seu dashboard.</small><small class="d-block mt-2">Você não precisa fazer mais nada 👍</small>';
+                    new bootstrap.Toast(toastEl).show();
+                }
+                document.getElementById('inviteNome').value = '';
+                document.getElementById('inviteFone').value = '';
+            } else {
+                var msg = (data && data.error) ? data.error : 'Não foi possível enviar o convite.';
+                fb.innerHTML = '';
+                var wrap = document.createElement('div');
+                wrap.className = 'text-danger';
+                wrap.style.whiteSpace = 'pre-line';
+                wrap.textContent = '❌ ' + msg;
+                fb.appendChild(wrap);
+                if (/plano|upgrade|membros/i.test(msg)) {
+                    var up = document.createElement('div');
+                    up.className = 'mt-3';
+                    up.innerHTML = '<a href="/planos/?upgrade_cta=invite_blocked#familia" class="btn btn-sm btn-neon">🚀 Fazer upgrade</a>';
+                    fb.appendChild(up);
+                }
+            }
+        } catch (e) {
+            fb.innerHTML = '<span class="text-danger">❌ Erro de rede. Tente de novo.</span>';
+        } finally {
+            btn.disabled = false;
+            if (spin) spin.classList.add('d-none');
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

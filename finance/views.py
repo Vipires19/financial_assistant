@@ -25,6 +25,8 @@ from django.contrib.auth import get_user_model
 from core.decorators import audit_log
 from core.decorators.auth import login_required_mongo
 from finance.repositories.despesa_fixa_repository import DespesaFixaRepository
+from core.services.user_scope import resolve_user_read_scope
+from core.services.family_ui_service import member_id_to_display_names
 from datetime import datetime, timedelta
 from dotenv import load_dotenv,find_dotenv
 load_dotenv(find_dotenv())
@@ -64,8 +66,6 @@ def dashboard_api_view(request):
     if not hasattr(request, 'user_mongo') or not request.user_mongo:
         return JsonResponse({'error': 'Não autenticado'}, status=401)
     
-    # SEGURANÇA: user_id vem do middleware, não do request do cliente
-    user_id = str(request.user_mongo['_id'])
     period = request.GET.get('period', 'mensal')
     month = request.GET.get('month')
     year = request.GET.get('year')
@@ -86,7 +86,7 @@ def dashboard_api_view(request):
 
     service = DashboardService()
     data = service.get_dashboard_data(
-        user_id=user_id,  # Sempre do usuário autenticado
+        user=request.user_mongo,
         period=period,
         month=month,
         year=year
@@ -109,7 +109,6 @@ def insights_api_view(request):
     if not hasattr(request, 'user_mongo') or not request.user_mongo:
         return JsonResponse({'error': 'Não autenticado'}, status=401)
 
-    user_id = str(request.user_mongo['_id'])
     period = request.GET.get('period', 'mensal')
 
     def _q_int(name):
@@ -127,7 +126,7 @@ def insights_api_view(request):
     try:
         service = DashboardService()
         dashboard_data = service.get_dashboard_data(
-            user_id=user_id, period=period, month=month, year=year
+            user=request.user_mongo, period=period, month=month, year=year
         )
     except Exception as e:
         logger.exception("Erro ao obter dados do dashboard para insights: %s", e)
@@ -218,8 +217,6 @@ def charts_api_view(request):
             'message': 'É necessário fazer login para acessar os gráficos'
         }, status=401)
     
-    # SEGURANÇA: user_id vem do middleware, não do request do cliente
-    user_id = str(request.user_mongo['_id'])
     period = request.GET.get('period', 'mensal')
     month = request.GET.get('month')
     year = request.GET.get('year')
@@ -229,16 +226,17 @@ def charts_api_view(request):
 
     try:
         service = DashboardService()
+        um = request.user_mongo
         
         if chart_type == 'category':
-            data = service.get_expenses_by_category_chart_data(user_id, period, month, year)
+            data = service.get_expenses_by_category_chart_data(um, period, month, year)
         elif chart_type == 'weekday':
-            data = service.get_expenses_by_weekday_chart_data(user_id, period, month, year)
+            data = service.get_expenses_by_weekday_chart_data(um, period, month, year)
         elif chart_type == 'hour':
-            data = service.get_expenses_by_hour_chart_data(user_id, period, month, year)
+            data = service.get_expenses_by_hour_chart_data(um, period, month, year)
         else:  # 'all'
             data = service.get_all_charts_data(
-                user_id=user_id,
+                user=um,
                 period=period,
                 month=month,
                 year=year
@@ -272,8 +270,6 @@ def transactions_api_view(request):
     if not hasattr(request, 'user_mongo') or not request.user_mongo:
         return JsonResponse({'error': 'Não autenticado'}, status=401)
     
-    # SEGURANÇA: user_id vem do middleware, não do request do cliente
-    user_id = str(request.user_mongo['_id'])
     period = request.GET.get('period', 'mensal')
     page = int(request.GET.get('page', 1))
     limit = int(request.GET.get('limit', 20))
@@ -288,17 +284,22 @@ def transactions_api_view(request):
     
     service = DashboardService()
     start_date, end_date = service._get_period_dates(period)
+    scope, _ = resolve_user_read_scope(request.user_mongo)
     
-    # SEGURANÇA: user_id sempre do usuário autenticado
-    data = service._get_filtered_transactions(
-        user_id=user_id,  # Sempre do usuário autenticado
+    raw = service._get_filtered_transactions(
+        scope,
         start_date=start_date,
         end_date=end_date,
         limit=limit,
-        skip=skip
+        skip=skip,
+        viewer=request.user_mongo,
     )
-    
-    return JsonResponse(data, json_dumps_params={'ensure_ascii': False})
+    pag = raw.get("pagination") or {}
+    payload = {
+        "transactions": raw.get("transactions", []),
+        **pag,
+    }
+    return JsonResponse(payload, json_dumps_params={"ensure_ascii": False})
 
 
 def report_api_view(request):
@@ -318,8 +319,6 @@ def report_api_view(request):
     if not hasattr(request, 'user_mongo') or not request.user_mongo:
         return JsonResponse({'error': 'Não autenticado'}, status=401)
     
-    # SEGURANÇA: user_id vem do middleware, não do request do cliente
-    user_id = str(request.user_mongo['_id'])
     period = request.GET.get('period', 'mensal')
     format_type = request.GET.get('format', 'text')
     use_ai = request.GET.get('use_ai', 'false').lower() == 'true'
@@ -344,9 +343,8 @@ def report_api_view(request):
                 'available_formats': ['text', 'json']
             }, status=501)
         
-        # SEGURANÇA: user_id sempre do usuário autenticado
         report = report_service.generate_report(
-            user_id=user_id,  # Sempre do usuário autenticado
+            user=request.user_mongo,
             period=period,
             format=format_type,
             use_ai=use_ai
@@ -378,7 +376,7 @@ def report_view(request):
     
     try:
         report_data = report_service.generate_text_report(
-            user_id=str(request.user_mongo['_id']),
+            user=request.user_mongo,
             period=period
         )
         
@@ -555,7 +553,12 @@ def despesas_fixas_view(request):
                 messages.error(request, "Não foi possível remover.")
         return redirect("finance:despesas-fixas")
 
-    docs = repo.find_by_user(user_id, apenas_ativas=False)
+    docs = repo.find_for_read_scope(request.user_mongo, apenas_ativas=False)
+    _, member_ids = resolve_user_read_scope(request.user_mongo)
+    owner_labels = member_id_to_display_names(member_ids)
+    self_uid = str(request.user_mongo["_id"])
+    has_family = bool(request.user_mongo.get("family_group_id"))
+
     despesas = []
     for d in docs:
         v = d.get("valor", 0)
@@ -563,6 +566,7 @@ def despesas_fixas_view(request):
             v = float(v)
         except (TypeError, ValueError):
             v = 0.0
+        oid = str(d.get("user_id", ""))
         despesas.append(
             {
                 "id": str(d["_id"]),
@@ -571,6 +575,8 @@ def despesas_fixas_view(request):
                 "valor_display": _fmt_brl(v),
                 "dia_vencimento": int(d.get("dia_vencimento", 1)),
                 "ativo": d.get("ativo", True),
+                "owner_nome": owner_labels.get(oid, "Membro"),
+                "is_mine": oid == self_uid,
             }
         )
 
@@ -581,6 +587,7 @@ def despesas_fixas_view(request):
             "user": request.user_mongo,
             "despesas": despesas,
             "dias_vencimento": list(range(1, 32)),
+            "has_family": has_family,
         },
     )
 
@@ -696,9 +703,8 @@ def accounts_balance_api_view(request):
         return JsonResponse({'error': 'Não autenticado'}, status=401)
     if request.method != 'GET':
         return JsonResponse({'error': 'Método não permitido'}, status=405)
-    user_id = str(request.user_mongo['_id'])
     service = DashboardService()
-    data = service.get_account_balances(user_id)
+    data = service.get_account_balances(request.user_mongo)
     return JsonResponse({
         'total_balance': data['total_balance'],
         'accounts': data['accounts'],
@@ -826,7 +832,7 @@ def pagar_fatura_api_view(request):
         return JsonResponse({'error': str(e)}, status=400)
 
     service = DashboardService()
-    balances = service.get_account_balances(user_id)
+    balances = service.get_account_balances(request.user_mongo)
     return JsonResponse({
         'success': True,
         'message': 'Fatura paga com sucesso.',
@@ -1037,8 +1043,27 @@ def plano_view(request):
     assinatura = user.get("assinatura", {})
 
     plano = assinatura.get("plano")
+    plano_key = assinatura.get("plano_key") or assinatura.get("plano_solicitado")
     status = assinatura.get("status")
     proximo_vencimento = assinatura.get("proximo_vencimento")
+
+    tipo_plano = (user.get("tipo_plano") or "").strip().lower()
+    if tipo_plano not in ("individual", "familia"):
+        if isinstance(plano_key, str) and plano_key.endswith("_familia"):
+            tipo_plano = "familia"
+        elif isinstance(plano_key, str) and plano_key.endswith("_individual"):
+            tipo_plano = "individual"
+        elif isinstance(plano, str):
+            if "familia" in plano:
+                tipo_plano = "familia"
+            elif "individual" in plano:
+                tipo_plano = "individual"
+
+    tipo_plano_label = "—"
+    if tipo_plano == "familia":
+        tipo_plano_label = "Família"
+    elif tipo_plano == "individual":
+        tipo_plano_label = "Individual"
 
     proximo_vencimento_str = None
     if proximo_vencimento and hasattr(proximo_vencimento, "strftime"):
@@ -1048,6 +1073,8 @@ def plano_view(request):
 
     context = {
         "plano": plano,
+        "plano_key": plano_key,
+        "tipo_plano_label": tipo_plano_label,
         "status": status,
         "proximo_vencimento": proximo_vencimento_str,
     }
@@ -1062,34 +1089,20 @@ def cancelar_assinatura_api_view(request):
     """
     user = request.user_mongo
     assinatura = user.get("assinatura", {})
-    mp_subscription_id = assinatura.get("mp_subscription_id") or assinatura.get("gateway_subscription_id")
-
-    if not mp_subscription_id:
-        return JsonResponse({
-            "success": False,
-            "message": "Assinatura não encontrada."
-        }, status=400)
-
     try:
-        from core.services.mercadopago_assinatura import cancelar_assinatura
-        cancelar_assinatura(str(mp_subscription_id))
+        from core.services.mercadopago_service import executar_cancelamento_pelo_usuario
+
+        result = executar_cancelamento_pelo_usuario(user)
+    except ValueError as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=400)
     except Exception as e:
-        logger.exception("Erro ao cancelar assinatura no MP: %s", e)
-        return JsonResponse({
-            "success": False,
-            "message": "Erro ao cancelar assinatura no Mercado Pago."
-        }, status=500)
+        logger.exception("Erro ao cancelar assinatura: %s", e)
+        return JsonResponse(
+            {"success": False, "message": "Erro ao cancelar assinatura no Mercado Pago."},
+            status=500,
+        )
 
-    user_repo = UserRepository()
-    user_repo.update(
-        str(user["_id"]),
-        **{"assinatura.plano": "sem_plano", "assinatura.status": "inativa"}
-    )
-
-    return JsonResponse({
-        "success": True,
-        "message": "Assinatura cancelada com sucesso."
-    })
+    return JsonResponse(result)
 
 
 def agenda_api_view(request):

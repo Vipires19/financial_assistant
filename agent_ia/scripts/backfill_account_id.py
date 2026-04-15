@@ -12,8 +12,11 @@ Ou no Django shell:
     >>> from agent_ia.scripts.backfill_account_id import run_backfill
     >>> run_backfill()
 """
+import logging
 import os
 import sys
+
+logger = logging.getLogger(__name__)
 
 # Permite rodar como script: python backfill_account_id.py (a partir da raiz: python agent_ia/scripts/backfill_account_id.py)
 if __name__ == "__main__":
@@ -73,9 +76,9 @@ def run_backfill():
         )
         transacoes_atualizadas += result.modified_count
 
-    print("--- Backfill account_id (legacy) ---")
-    print(f"Usuários atualizados: {usuarios_atualizados}")
-    print(f"Transações atualizadas: {transacoes_atualizadas}")
+    logger.info("--- Backfill account_id (legacy) ---")
+    logger.info(f"Usuários atualizados: {usuarios_atualizados}")
+    logger.info(f"Transações atualizadas: {transacoes_atualizadas}")
     return {"usuarios_atualizados": usuarios_atualizados, "transacoes_atualizadas": transacoes_atualizadas}
 
 
