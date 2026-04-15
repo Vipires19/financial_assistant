@@ -1,5 +1,49 @@
 # Notas de versão – Leozera
 
+## [v1.0.0] - 2026-04-15
+
+### ✨ Novas funcionalidades
+
+- Implementado modo família completo
+- Convite de membros via WhatsApp
+- Dashboard compartilhado entre membros
+
+### 💰 Monetização
+
+- Planos individual e família (mensal/anual)
+- Integração com Mercado Pago (assinaturas)
+- Upgrade via interface
+
+### 🔄 Assinaturas
+
+- Webhook para ativação automática
+- Cancelamento com grace period
+- Downgrade automático via job
+
+### 📲 Integrações
+
+- Integração com WAHA para envio de mensagens
+- Normalização de telefone
+
+### 🎨 UX/UI
+
+- Página de planos reformulada (4 planos)
+- Landing page atualizada com plano família
+- Sidebar com estados bloqueados melhorados
+
+### 🛠️ Melhorias técnicas
+
+- Centralização de planos (plan_config)
+- Validações de acesso por plano
+- Tratamento de inconsistências de dados
+
+### 🐛 Correções
+
+- Correção de envio de convite (WAHA / ambiente)
+- Ajustes de visual na sidebar
+
+---
+
 ## v0.4.1 – Onboarding e Tour do Dashboard
 
 **Versão:** v0.4.1  
