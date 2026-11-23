@@ -31,7 +31,7 @@ services:
     image: redis:7
     container_name: financeiro_redis
     ports:
-      - "6379:6379"
+      - "6378:6378"
     volumes:
       - redis_data:/data
     networks:
